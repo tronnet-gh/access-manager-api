@@ -16,17 +16,19 @@ func main() {
 		})
 	})
 
+	users := GetLocaldb("localdb.json")
+
 	router.GET("/users", func(c *gin.Context) {})
-	router.POST("/users/:userid", func(c *gin.Context) {
-		var user User
-		if err := c.ShouldBind(&user); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
+	router.POST("/users/:userid", func(c *gin.Context) {})
+	router.GET("/users/:userid", func(c *gin.Context) {
+		userid := c.Param("userid")
+		user, ok := users[userid]
+		if ok {
+			c.JSON(http.StatusOK, user)
+		} else {
+			c.JSON(http.StatusNotFound, nil)
 		}
-		user.Id = c.Param("userid")
-		c.JSON(http.StatusOK, user)
 	})
-	router.GET("/users/:userid", func(c *gin.Context) {})
 	router.DELETE("/users/:userid", func(c *gin.Context) {})
 
 	router.GET("/groups", func(c *gin.Context) {})
@@ -37,5 +39,5 @@ func main() {
 	router.POST("/groups/:groupid/members/:userid", func(c *gin.Context) {})
 	router.DELETE("/groups/:groupid/members/:userid", func(c *gin.Context) {})
 
-	router.Run("0.0.0.0:80") // listen and serve on 0.0.0.0:8080
+	router.Run("0.0.0.0:8083") // listen and serve on 0.0.0.0:8080
 }

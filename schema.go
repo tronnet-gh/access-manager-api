@@ -1,5 +1,6 @@
 package main
 
+/*
 type User struct {
 	Id        string
 	Password  string `form:"userpassword" binding:"required"`
@@ -9,3 +10,4 @@ type User struct {
 	Cluster   struct{}
 	Templates struct{}
 }
+*/
