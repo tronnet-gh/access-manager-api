@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// returns an error if the groupname format was not correct
 func ParseGroupname(groupname string) (Groupname, error) {
 	g := Groupname{}
 	x := strings.Split(groupname, "-")
@@ -21,6 +22,7 @@ func ParseGroupname(groupname string) (Groupname, error) {
 	}
 }
 
+// returns an error if the username format was not correct
 func ParseUsername(username string) (Username, error) {
 	u := Username{}
 	x := strings.Split(username, "@")

@@ -15,8 +15,9 @@ import (
 )
 
 type Backends struct {
-	pve  *pve.ProxmoxClient
-	ldap *ldap.LDAPClient
+	handler string
+	pve     *pve.ProxmoxClient
+	ldap    *ldap.LDAPClient
 }
 
 func GetBackendsFromContext(c *gin.Context) (*Backends, int, error) {

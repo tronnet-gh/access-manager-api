@@ -17,9 +17,13 @@ func NewGroup(backends *Backends, groupname common.Groupname) (int, error) {
 	case "pve":
 		return backends.pve.NewGroup(groupname)
 	case "ldap":
-		backends.ldap.NewGroup(groupname)
+		code, err := backends.ldap.NewGroup(groupname)
+		if err != nil {
+			return code, err
+		}
+
 		//pve sync
-		return 200, nil
+		return backends.pve.SyncRealms()
 	}
 	return 200, nil
 }
@@ -30,9 +34,13 @@ func DelGroup(backends *Backends, groupname common.Groupname) (int, error) {
 	case "pve":
 		return backends.pve.DelGroup(groupname)
 	case "ldap":
-		backends.ldap.DelGroup(groupname)
+		code, err := backends.ldap.DelGroup(groupname)
+		if err != nil {
+			return code, err
+		}
+
 		//pve sync
-		return 200, nil
+		return backends.pve.SyncRealms()
 	}
 	return 200, nil
 }

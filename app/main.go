@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/rand"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -29,10 +30,15 @@ func Run(configPath *string) {
 	log.Printf("Read in config from %s\n", *configPath)
 
 	// setup router
-	router := SetupAPI(&Config)
+	router := SetupAPISessionStore(&Config)
+	gin.SetMode(gin.ReleaseMode)
 
 	// make global session map
 	UserSessions = make(map[string]*Backends)
+
+	router.GET("/version", func(c *gin.Context) {
+		c.JSON(200, gin.H{"version": Version})
+	})
 
 	router.POST("/ticket", func(c *gin.Context) {
 		body := common.Login{}
@@ -47,36 +53,34 @@ func Run(configPath *string) {
 			c.JSON(http.StatusBadRequest, gin.H{"auth": false, "error": err.Error()})
 			return
 		}
+		handler := Config.Realms[body.Username.Realm].Handler
 
-		// bind proxmox backend
-		newPVEClient, code, err := pve.NewClientFromCredentials(Config.PVE, body.Username, body.Password)
+		// always bind proxmox backend
+		PVEClient, code, err := pve.NewClientFromCredentials(Config.PVE, body.Username, body.Password)
 		if err != nil { // pve client failed to bind
 			c.JSON(code, gin.H{"auth": false, "error": err.Error()})
 			return
 		}
 
-		// bind ldap backend
-		newLDAPClient, code, err := ldap.NewClientFromCredentials(Config.LDAP, body.Username, body.Password)
-		if err != nil { // ldap client failed to bind
-			c.JSON(code, gin.H{"auth": false, "error": err.Error()})
-			return
-		}
-		//err = newLDAPClient.BindUser(body.Username, body.Password)
-		//if err != nil { // failed to authenticate, return error
-		//	c.JSON(http.StatusBadRequest, gin.H{"auth": false, "error": err.Error()})
-		//	return
-		//}
-		// todo allow ldap backed to fail if user is not using an ldap backend
+		// bind ldap backend if backend is ldap
+		var LDAPClient *ldap.LDAPClient
+		if handler == "ldap" {
+			LDAPClient, code, err = ldap.NewClientFromCredentials(Config.LDAP, body.Username, body.Password)
+			if err != nil { // ldap client failed to bind
+				c.JSON(code, gin.H{"auth": false, "error": err.Error()})
+				return
+			}
+		} //ldap client will be nil if it is unused!!
 
 		// successful binding at this point
 		// create new session
 		session := sessions.Default(c)
-		// create (hopefully) safe uuid to map to ldap session
+		// create random uuid to map user to backends
 		uuid, _ := uuid.NewV4()
 		// set uuid mapping in session
 		session.Set("SessionUUID", uuid.String())
 		// set uuid mapping in LDAPSessions
-		UserSessions[uuid.String()] = &Backends{pve: newPVEClient, ldap: newLDAPClient}
+		UserSessions[uuid.String()] = &Backends{handler: handler, pve: PVEClient, ldap: LDAPClient}
 		// save the session
 		session.Save()
 		// return successful auth
@@ -97,12 +101,11 @@ func Run(configPath *string) {
 		c.JSON(http.StatusUnauthorized, gin.H{"auth": false})
 	})
 
-	router.GET("/version", func(c *gin.Context) {
-		c.JSON(200, gin.H{"version": Version})
-	})
-
-	router.POST("/pool/:poolid", func(c *gin.Context) {
-		poolid, _ := c.Params.Get("poolid")
+	router.POST("/pools/:poolid", func(c *gin.Context) {
+		poolid, ok := c.Params.Get("poolid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+		}
 
 		backends, code, err := GetBackendsFromContext(c)
 		if err != nil {
@@ -117,8 +120,11 @@ func Run(configPath *string) {
 		}
 	})
 
-	router.DELETE("/pool/:poolid", func(c *gin.Context) {
-		poolid, _ := c.Params.Get("poolid")
+	router.DELETE("/pools/:poolid", func(c *gin.Context) {
+		poolid, ok := c.Params.Get("poolid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+		}
 
 		backends, code, err := GetBackendsFromContext(c)
 		if err != nil {
@@ -126,6 +132,52 @@ func Run(configPath *string) {
 		}
 
 		code, err = DelPool(backends, poolid)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.POST("/groups/:groupid", func(c *gin.Context) {
+		groupid, ok := c.Params.Get("groupid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+		}
+		groupname, err := common.ParseGroupname(groupid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		}
+
+		backends, code, err := GetBackendsFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		}
+
+		code, err = NewGroup(backends, groupname)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.DELETE("/groups/:groupid", func(c *gin.Context) {
+		groupid, ok := c.Params.Get("groupid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+		}
+		groupname, err := common.ParseGroupname(groupid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		}
+
+		backends, code, err := GetBackendsFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		}
+
+		code, err = DelGroup(backends, groupname)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
@@ -141,15 +193,11 @@ func Run(configPath *string) {
 	}
 }
 
-func SetupAPI(config *common.Config) *gin.Engine {
+func SetupAPISessionStore(config *common.Config) *gin.Engine {
 	secretKey := make([]byte, 256)
-	n, err := rand.Read(secretKey)
-	if err != nil {
-		log.Fatalf("Error when generating session secret key: %s\n", err.Error())
-	}
+	n, _ := rand.Read(secretKey) // rand Read never returns an error, always crashes on error
 	log.Printf("Generated session secret key of length %d\n", n)
 
-	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 	store := cookie.NewStore(secretKey)
 	store.Options(sessions.Options{
@@ -160,7 +208,7 @@ func SetupAPI(config *common.Config) *gin.Engine {
 	})
 	router.Use(sessions.Sessions(config.SessionCookieName, store))
 
-	log.Printf("Started API router and cookie store (Name: %s Params: %+v)\n", config.SessionCookieName, config.SessionCookie)
+	log.Printf("Started cookie store (Name: %s Params: %+v)\n", config.SessionCookieName, config.SessionCookie)
 
 	return router
 }
