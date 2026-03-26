@@ -9,7 +9,7 @@ import (
 
 	common "user-manager-api/app/common"
 	ldap "user-manager-api/app/ldap"
-	"user-manager-api/app/pve"
+	pve "user-manager-api/app/pve"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -23,15 +23,16 @@ var UserSessions map[string]*Backends
 
 func Run(configPath *string) {
 	// load config values
-	Config, err := common.GetConfig(*configPath)
+	var err error
+	Config, err = common.GetConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Error when reading config file: %s\n", err)
 	}
 	log.Printf("Read in config from %s\n", *configPath)
 
 	// setup router
-	router := SetupAPISessionStore(&Config)
 	gin.SetMode(gin.ReleaseMode)
+	router := SetupAPISessionStore(&Config)
 
 	// make global session map
 	UserSessions = make(map[string]*Backends)
@@ -42,7 +43,8 @@ func Run(configPath *string) {
 
 	router.POST("/ticket", func(c *gin.Context) {
 		body := common.Login{}
-		if err := c.ShouldBind(&body); err != nil { // bad request from binding
+		err := c.ShouldBind(&body)
+		if err != nil { // bad request from binding
 			c.JSON(http.StatusBadRequest, gin.H{"auth": false, "error": err.Error()})
 			return
 		}
@@ -105,11 +107,13 @@ func Run(configPath *string) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			return
 		}
 
 		backends, code, err := GetBackendsFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
+			return
 		}
 
 		code, err = NewPool(backends, poolid)
@@ -124,11 +128,13 @@ func Run(configPath *string) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			return
 		}
 
 		backends, code, err := GetBackendsFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
+			return
 		}
 
 		code, err = DelPool(backends, poolid)
@@ -143,15 +149,18 @@ func Run(configPath *string) {
 		groupid, ok := c.Params.Get("groupid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
 		}
 		groupname, err := common.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
 		}
 
 		backends, code, err := GetBackendsFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
+			return
 		}
 
 		code, err = NewGroup(backends, groupname)
@@ -166,18 +175,85 @@ func Run(configPath *string) {
 		groupid, ok := c.Params.Get("groupid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
 		}
 		groupname, err := common.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
 		}
 
 		backends, code, err := GetBackendsFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
+			return
 		}
 
 		code, err = DelGroup(backends, groupname)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.POST("/pools/:poolid/groups/:groupid", func(c *gin.Context) {
+		poolid, ok := c.Params.Get("poolid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+		groupid, ok := c.Params.Get("groupid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+
+		groupname, err := common.ParseGroupname(groupid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		backends, code, err := GetBackendsFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		code, err = AddGroupToPool(backends, groupname, poolid)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.DELETE("/pools/:poolid/groups/:groupid", func(c *gin.Context) {
+		poolid, ok := c.Params.Get("poolid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+		groupid, ok := c.Params.Get("groupid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+
+		groupname, err := common.ParseGroupname(groupid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		backends, code, err := GetBackendsFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		code, err = DelGroupFromPool(backends, groupname, poolid)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {

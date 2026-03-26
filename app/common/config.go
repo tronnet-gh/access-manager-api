@@ -12,7 +12,8 @@ type LDAPConfig struct {
 }
 
 type PVEConfig struct {
-	URL string `json:"url"`
+	URL            string `json:"url"`
+	PAASClientRole string `json:"paas-client-role"`
 }
 
 type RealmConfig struct {

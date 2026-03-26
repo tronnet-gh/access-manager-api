@@ -13,10 +13,8 @@ import (
 
 // LDAPClient wrapper struct containing the connection, baseDN, peopleDN, and groupsDN
 type LDAPClient struct {
-	client   *ldap.Conn
-	basedn   string
-	peopledn string
-	groupsdn string
+	config *common.LDAPConfig
+	client *ldap.Conn
 }
 
 // returns a new LDAPClient from the config
@@ -34,13 +32,11 @@ func NewClientFromCredentials(config common.LDAPConfig, username common.Username
 	}
 
 	ldap := LDAPClient{
-		client:   LDAPConn,
-		basedn:   config.BaseDN,
-		peopledn: "ou=people," + config.BaseDN,
-		groupsdn: "ou=groups," + config.BaseDN,
+		config: &config,
+		client: LDAPConn,
 	}
 
-	userdn := fmt.Sprintf("uid=%s,%s", username.UserID, ldap.peopledn)
+	userdn := fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, ldap.config.BaseDN)
 	err = ldap.client.Bind(userdn, password)
 
 	if err != nil {
@@ -54,7 +50,7 @@ func (l LDAPClient) GetUser(username common.Username) (common.User, int, error) 
 	user := common.User{}
 
 	searchRequest := ldap.NewSearchRequest( //  setup search for user by uid
-		fmt.Sprintf("uid=%s,%s", username.UserID, l.peopledn), // The base dn to search
+		fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, l.config.BaseDN), // The base dn to search
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		"(&(objectClass=inetOrgPerson))",                      // The filter to apply
 		[]string{"dn", "cn", "sn", "mail", "uid", "memberOf"}, // A list attributes to retrieve
@@ -82,7 +78,7 @@ func (l LDAPClient) NewUser(username common.Username, user common.User) (int, er
 	}
 
 	addRequest := ldap.NewAddRequest(
-		fmt.Sprintf("uid=%s,%s", username.UserID, l.peopledn), // DN
+		fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, l.config.BaseDN), // DN
 		nil, // controls
 	)
 	addRequest.Attribute("sn", []string{user.SN})
@@ -108,7 +104,7 @@ func (l LDAPClient) ModUser(username common.Username, user common.User) (int, er
 	}
 
 	modifyRequest := ldap.NewModifyRequest(
-		fmt.Sprintf("uid=%s,%s", username.UserID, l.peopledn),
+		fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, l.config.BaseDN),
 		nil,
 	)
 	if user.CN != "" {
@@ -133,7 +129,7 @@ func (l LDAPClient) ModUser(username common.Username, user common.User) (int, er
 }
 
 func (l LDAPClient) DelUser(username common.Username) (int, error) {
-	userDN := fmt.Sprintf("uid=%s,%s", username.UserID, l.peopledn)
+	userDN := fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, l.config.BaseDN)
 
 	// assumes that olcMemberOfRefint=true updates member attributes of referenced groups
 
@@ -154,7 +150,7 @@ func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, int, err
 	group := common.Group{}
 
 	searchRequest := ldap.NewSearchRequest( //  setup search for user by uid
-		fmt.Sprintf("cn=%s,%s", groupname.GroupID, l.groupsdn), // The base dn to search
+		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN), // The base dn to search
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		"(&(objectClass=groupOfNames))", // The filter to apply
 		[]string{"cn", "member"},        // A list attributes to retrieve
@@ -174,7 +170,7 @@ func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, int, err
 
 func (l LDAPClient) NewGroup(groupname common.Groupname) (int, error) {
 	addRequest := ldap.NewAddRequest(
-		fmt.Sprintf("cn=%s,%s", groupname.GroupID, l.groupsdn), // DN
+		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN), // DN
 		nil, // controls
 	)
 	addRequest.Attribute("cn", []string{groupname.GroupID})
@@ -191,7 +187,7 @@ func (l LDAPClient) NewGroup(groupname common.Groupname) (int, error) {
 
 func (l LDAPClient) ModGroup(groupname common.Groupname, group common.Group) (int, error) {
 	modifyRequest := ldap.NewModifyRequest(
-		fmt.Sprintf("cn=%s,%s", groupname.GroupID, l.groupsdn),
+		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN),
 		nil,
 	)
 
@@ -206,7 +202,7 @@ func (l LDAPClient) ModGroup(groupname common.Groupname, group common.Group) (in
 }
 
 func (l LDAPClient) DelGroup(groupname common.Groupname) (int, error) {
-	groupDN := fmt.Sprintf("cn=%s,%s", groupname.GroupID, l.groupsdn)
+	groupDN := fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN)
 
 	// assumes that memberOf overlay will automatically update referenced memberOf attributes
 
@@ -224,8 +220,8 @@ func (l LDAPClient) DelGroup(groupname common.Groupname) (int, error) {
 }
 
 func (l LDAPClient) AddUserToGroup(username common.Username, groupname common.Groupname) (int, error) {
-	userDN := fmt.Sprintf("uid=%s,%s", username.UserID, l.peopledn)
-	groupDN := fmt.Sprintf("cn=%s,%s", groupname.GroupID, l.groupsdn)
+	userDN := fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, l.config.BaseDN)
+	groupDN := fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN)
 
 	modifyRequest := ldap.NewModifyRequest( // modify group member value
 		groupDN,
@@ -243,8 +239,8 @@ func (l LDAPClient) AddUserToGroup(username common.Username, groupname common.Gr
 }
 
 func (l LDAPClient) DelUserFromGroup(username common.Username, groupname common.Groupname) (int, error) {
-	userDN := fmt.Sprintf("uid=%s,%s", username.UserID, l.peopledn)
-	groupDN := fmt.Sprintf("cn=%s,%s", groupname.GroupID, l.groupsdn)
+	userDN := fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, l.config.BaseDN)
+	groupDN := fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN)
 
 	modifyRequest := ldap.NewModifyRequest( // modify group member value
 		groupDN,

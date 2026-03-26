@@ -1,24 +1,5 @@
 package app
 
-type BackendClient interface {
-	BindUser(username string, password string) error
-
-	//GetAllUsers() ([]User, int, error)
-	GetUser(username string) (User, int, error)
-	AddUser(username string, user User) (int, error)
-	ModUser(username string, user User) (int, error)
-	DelUser(username string) (int, error)
-
-	//GetAllGroups() ([]Group, int, error)
-	GetGroup(groupname string) (Group, int, error)
-	AddGroup(groupname string, group Group) (int, error)
-	ModGroup(groupname string, group Group) (int, error)
-	DelGroup(groupname string) (int, error)
-
-	AddUserToGroup(username string, groupname string)
-	RemoveUserFromGroup(username string, groupname string)
-}
-
 type Pool struct {
 	PoolID    string         `json:"poolid"`
 	Path      string         `json:"-"` // typically /pool/poolid from proxmox, only used internally
