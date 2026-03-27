@@ -90,6 +90,7 @@ func Run(configPath *string) {
 	})
 
 	router.DELETE("/ticket", func(c *gin.Context) {
+		// get session uuid from session cookie
 		session := sessions.Default(c)
 		SessionUUID := session.Get("SessionUUID")
 		if SessionUUID == nil {
@@ -97,8 +98,10 @@ func Run(configPath *string) {
 			return
 		}
 		uuid := SessionUUID.(string)
+
+		// delete uuid entry from user sessions
 		delete(UserSessions, uuid)
-		session.Options(sessions.Options{MaxAge: -1}) // set max age to -1 so it is deleted
+		session.Options(sessions.Options{MaxAge: -1}) // set max age to -1 so session cookie is deleted
 		session.Save()
 		c.JSON(http.StatusUnauthorized, gin.H{"auth": false})
 	})

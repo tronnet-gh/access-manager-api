@@ -5,9 +5,11 @@ import (
 )
 
 func NewPool(backends *Backends, poolname string) (int, error) {
+	// only pve backend handles pools
 	return backends.pve.NewPool(poolname)
 }
 func DelPool(backends *Backends, poolname string) (int, error) {
+	// only pve backend handles pools
 	return backends.pve.DelPool(poolname)
 }
 

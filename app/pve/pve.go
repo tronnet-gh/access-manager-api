@@ -29,11 +29,17 @@ func NewClientFromCredentials(config common.PVEConfig, username common.Username,
 
 	client := proxmox.NewClient(config.URL,
 		proxmox.WithHTTPClient(&HTTPClient),
-		proxmox.WithCredentials(&proxmox.Credentials{Username: username.ToString(), Password: password}),
+		proxmox.WithCredentials(&proxmox.Credentials{Username: username.UserID, Realm: username.Realm, Password: password}),
 	)
 
-	// todo this should return an error code if the binding failed (ie fetch version to check if the auth was actually ok)
+	// check that the user is authenticated because proxmox.NewClient does not return an error
+	// version route is accessible to any authenticated user
+	_, err := client.Version(context.Background())
+	if err != nil { // could not get version so therefore the user is not authenticated
+		return nil, http.StatusUnauthorized, err
+	}
 
+	// todo this should return an error code if the binding failed (ie fetch version to check if the auth was actually ok)
 	return &ProxmoxClient{config: &config, client: client}, http.StatusOK, nil
 }
 
