@@ -169,6 +169,7 @@ func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, int, err
 }
 
 func (l LDAPClient) NewGroup(groupname common.Groupname) (int, error) {
+	// add new group by ID only
 	addRequest := ldap.NewAddRequest(
 		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN), // DN
 		nil, // controls

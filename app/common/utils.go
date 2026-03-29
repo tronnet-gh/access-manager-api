@@ -6,6 +6,8 @@ import (
 )
 
 // returns an error if the groupname format was not correct
+// TODO: handle group names with x-y format where y is not a registered realm
+// TODO: handle group names with x-y-z-... format
 func ParseGroupname(groupname string) (Groupname, error) {
 	g := Groupname{}
 	x := strings.Split(groupname, "-")

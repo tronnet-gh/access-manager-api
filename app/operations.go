@@ -19,7 +19,6 @@ func NewGroup(backends *Backends, groupname common.Groupname) (int, error) {
 	case "pve":
 		return backends.pve.NewGroup(groupname)
 	case "ldap":
-
 		code, err := backends.ldap.NewGroup(groupname)
 		if err != nil {
 			return code, err

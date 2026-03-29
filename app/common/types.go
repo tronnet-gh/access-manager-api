@@ -9,7 +9,10 @@ type Pool struct {
 	Templates Templates      `json:"templates"`
 }
 
-type Groupname struct { // proxmox typically formats as gid-realm for non pve realms
+// proxmox typically formats as gid-realm for non pve realms
+// proxmox realms are formatted without realm values
+// I assume that backends store groups by ID only and only proxmox will append the realm string
+type Groupname struct {
 	GroupID string `json:"gid"`
 	Realm   string `json:"realm"`
 }

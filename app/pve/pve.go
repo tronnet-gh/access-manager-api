@@ -98,7 +98,8 @@ func (pve ProxmoxClient) DelPool(poolname string) (int, error) {
 }
 
 func (pve ProxmoxClient) NewGroup(groupname common.Groupname) (int, error) {
-	err := pve.client.NewGroup(context.Background(), groupname.ToString(), "")
+	// add new group ny ID only
+	err := pve.client.NewGroup(context.Background(), groupname.GroupID, "")
 	if proxmox.IsNotAuthorized(err) {
 		return 401, err
 	} else if err != nil {
@@ -109,7 +110,7 @@ func (pve ProxmoxClient) NewGroup(groupname common.Groupname) (int, error) {
 }
 
 func (pve ProxmoxClient) DelGroup(groupname common.Groupname) (int, error) {
-	pvegroup, err := pve.client.Group(context.Background(), groupname.ToString())
+	pvegroup, err := pve.client.Group(context.Background(), groupname.GroupID)
 	if proxmox.IsNotFound(err) { // errors if group does not exist
 		return 404, err
 	} else if err != nil {
