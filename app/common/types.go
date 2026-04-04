@@ -14,12 +14,14 @@ type Backend interface {
 }
 
 type Pool struct {
-	PoolID    string         `json:"poolid"`
-	Path      string         `json:"-"` // typically /pool/poolid from proxmox, only used internally
-	Groups    []Group        `json:"groups"`
-	Resources map[string]any `json:"resources"`
-	Cluster   Cluster        `json:"cluster"`
-	Templates Templates      `json:"templates"`
+	PoolID       string          `json:"poolid"`
+	Path         string          `json:"-"` // typically /pool/poolid from proxmox, only used internally
+	Groups       []Group         `json:"groups"`
+	Resources    map[string]any  `json:"resources"`
+	Templates    Templates       `json:"templates"`
+	AllowedNodes map[string]bool `json:"nodes-allowed"`
+	VMIDRange    VMID            `json:"vmid-allowed"`
+	Backups      Backups         `json:"backups-allowed"` // measured in numbers
 }
 
 // proxmox typically formats as gid-realm for non pve realms
@@ -32,8 +34,7 @@ type Groupname struct {
 
 type Group struct {
 	Groupname Groupname `json:"groupname"`
-	Handler   string    `json:"-"`
-	Role      string    `json:"role"`
+	Role      string    `json:"role"` // role in owner pool
 	Users     []User    `json:"users"`
 }
 
@@ -44,18 +45,10 @@ type Username struct { // ie userid@realm
 
 type User struct {
 	Username Username `json:"username"`
-	Handler  string   `json:"-"`
 	CN       string   `json:"cn"` // aka first name
 	SN       string   `json:"sn"` // aka last name
 	Mail     string   `json:"mail"`
 	Password string   `json:"password"` // only used for POST requests
-}
-
-type Cluster struct {
-	Nodes map[string]bool `json:"nodes"`
-	VMID  VMID            `json:"vmid"`
-	//Pools   map[string]bool `json:"pools"`
-	Backups Backups `json:"backups"`
 }
 
 type VMID struct {
