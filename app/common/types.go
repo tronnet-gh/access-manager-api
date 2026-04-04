@@ -1,5 +1,18 @@
 package app
 
+type Backend interface {
+	NewPool(poolname string) (int, error)
+	DelPool(poolname string) (int, error)
+	NewGroup(groupname Groupname) (int, error)
+	DelGroup(groupname Groupname) (int, error)
+	AddGroupToPool(groupname Groupname, poolname string) (int, error)
+	DelGroupFromPool(groupname Groupname, poolname string) (int, error)
+	NewUser(username Username, user User) (int, error)
+	DelUser(username Username) (int, error)
+	AddUserToGroup(username Username, groupname Groupname) (int, error)
+	DelUserFromGroup(username Username, groupname Groupname) (int, error)
+}
+
 type Pool struct {
 	PoolID    string         `json:"poolid"`
 	Path      string         `json:"-"` // typically /pool/poolid from proxmox, only used internally

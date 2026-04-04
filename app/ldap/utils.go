@@ -7,6 +7,12 @@ import (
 	common "user-manager-api/app/common"
 )
 
+type LDAPConfig struct {
+	BaseDN   string
+	LdapURL  string
+	StartTLS bool
+}
+
 func LDAPEntryToUser(entry *ldap.Entry) common.User {
 	return common.User{
 		CN:   entry.GetAttributeValue("cn"),

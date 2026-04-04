@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,12 +16,14 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/luthermonson/go-proxmox"
 	uuid "github.com/nu7hatch/gouuid"
 )
 
 var Version = "0.0.1"
 var Config common.Config
-var UserSessions map[string]*Backends
+var UserSessions map[string]*UserSession
+var Realms map[string]Realm
 
 func Run(configPath *string) {
 	// load config values
@@ -34,8 +38,12 @@ func Run(configPath *string) {
 	gin.SetMode(gin.ReleaseMode)
 	router := SetupAPISessionStore(&Config)
 
+	// get realms from proxmox
+	Realms = make(map[string]Realm)
+	Realms = GetRealmsFromPVE(&Config)
+
 	// make global session map
-	UserSessions = make(map[string]*Backends)
+	UserSessions = make(map[string]*UserSession)
 
 	router.GET("/version", func(c *gin.Context) {
 		c.JSON(200, gin.H{"version": Version})
@@ -55,7 +63,9 @@ func Run(configPath *string) {
 			c.JSON(http.StatusBadRequest, gin.H{"auth": false, "error": err.Error()})
 			return
 		}
-		handler := Config.Realms[body.Username.Realm].Handler
+		handler := Realms[body.Username.Realm].Type
+
+		userbackends := UserSession{}
 
 		// always bind proxmox backend
 		PVEClient, code, err := pve.NewClientFromCredentials(Config.PVE, body.Username, body.Password)
@@ -63,16 +73,19 @@ func Run(configPath *string) {
 			c.JSON(code, gin.H{"auth": false, "error": err.Error()})
 			return
 		}
+		userbackends.PVE = PVEClient
 
 		// bind ldap backend if backend is ldap
-		var LDAPClient *ldap.LDAPClient
 		if handler == "ldap" {
-			LDAPClient, code, err = ldap.NewClientFromCredentials(Config.LDAP, body.Username, body.Password)
+			config := Realms[body.Username.Realm].Config.(ldap.LDAPConfig)
+			LDAPClient, code, err := ldap.NewClientFromCredentials(config, body.Username, body.Password)
 			if err != nil { // ldap client failed to bind
 				c.JSON(code, gin.H{"auth": false, "error": err.Error()})
 				return
 			}
-		} //ldap client will be nil if it is unused!!
+			userbackends.Realm.Name = body.Username.Realm
+			userbackends.Realm.Handler = LDAPClient
+		}
 
 		// successful binding at this point
 		// create new session
@@ -82,7 +95,7 @@ func Run(configPath *string) {
 		// set uuid mapping in session
 		session.Set("SessionUUID", uuid.String())
 		// set uuid mapping in LDAPSessions
-		UserSessions[uuid.String()] = &Backends{handler: handler, pve: PVEClient, ldap: LDAPClient}
+		UserSessions[uuid.String()] = &userbackends
 		// save the session
 		session.Save()
 		// return successful auth
@@ -113,7 +126,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		backends, code, err := GetBackendsFromContext(c)
+		backends, code, err := GetUserSessionFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 			return
@@ -134,7 +147,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		backends, code, err := GetBackendsFromContext(c)
+		backends, code, err := GetUserSessionFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 			return
@@ -160,7 +173,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		backends, code, err := GetBackendsFromContext(c)
+		backends, code, err := GetUserSessionFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 			return
@@ -186,7 +199,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		backends, code, err := GetBackendsFromContext(c)
+		backends, code, err := GetUserSessionFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 			return
@@ -218,7 +231,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		backends, code, err := GetBackendsFromContext(c)
+		backends, code, err := GetUserSessionFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 			return
@@ -250,7 +263,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		backends, code, err := GetBackendsFromContext(c)
+		backends, code, err := GetUserSessionFromContext(c)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 			return
@@ -290,4 +303,63 @@ func SetupAPISessionStore(config *common.Config) *gin.Engine {
 	log.Printf("Started cookie store (Name: %s Params: %+v)\n", config.SessionCookieName, config.SessionCookie)
 
 	return router
+}
+
+func GetRealmsFromPVE(config *common.Config) map[string]Realm {
+	realms := map[string]Realm{}
+
+	HTTPClient := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+	token := fmt.Sprintf(`%s@%s!%s`, config.PVE.Token.User, config.PVE.Token.Realm, config.PVE.Token.ID)
+	client := proxmox.NewClient(config.PVE.URL,
+		proxmox.WithHTTPClient(&HTTPClient),
+		proxmox.WithAPIToken(token, config.PVE.Token.UUID),
+	)
+
+	pverealms, err := client.Domains(context.Background())
+	if err != nil {
+		// failure to get realms is a fatal error
+		log.Fatalf("Error getting authentication realms: %s", err.Error())
+	}
+
+	// add required pve realm handler, removing the pve api token
+	pveconfig := common.PVEConfig{
+		URL:            config.PVE.URL,
+		PAASClientRole: config.PVE.PAASClientRole,
+	}
+	realms["pve"] = Realm{
+		Type:   "pve",
+		Config: pveconfig,
+	}
+	log.Printf("Configured default authentication realm pve")
+
+	// iterate through handlers and
+	for _, r := range pverealms {
+		realm, err := client.Domain(context.Background(), r.Realm)
+		if err != nil {
+			log.Printf("Error getting authentication realm %s: %s", r.Realm, err.Error())
+		}
+
+		if realm.Type == "ldap" {
+			ldapconfig := ldap.LDAPConfig{
+				BaseDN:   realm.BaseDN,
+				LdapURL:  fmt.Sprintf("ldap://%s", realm.Server1),
+				StartTLS: realm.Mode == "ldap+starttls",
+			}
+			realms[realm.Realm] = Realm{
+				Type:   realm.Type,
+				Config: ldapconfig,
+			}
+			log.Printf("Configured external authentication realm %s", realm.Realm)
+		} else {
+			continue
+		}
+	}
+
+	return realms
 }

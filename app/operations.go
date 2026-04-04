@@ -1,126 +1,120 @@
 package app
 
 import (
+	"fmt"
+	"net/http"
 	common "user-manager-api/app/common"
 )
 
-func NewPool(backends *Backends, poolname string) (int, error) {
+func NewPool(backends *UserSession, poolname string) (int, error) {
 	// only pve backend handles pools
-	return backends.pve.NewPool(poolname)
+	return backends.PVE.NewPool(poolname)
 }
-func DelPool(backends *Backends, poolname string) (int, error) {
+func DelPool(backends *UserSession, poolname string) (int, error) {
 	// only pve backend handles pools
-	return backends.pve.DelPool(poolname)
+	return backends.PVE.DelPool(poolname)
 }
 
-func NewGroup(backends *Backends, groupname common.Groupname) (int, error) {
-	handler := Config.Realms[groupname.Realm].Handler
-	switch handler {
-	case "pve":
-		return backends.pve.NewGroup(groupname)
-	case "ldap":
-		code, err := backends.ldap.NewGroup(groupname)
+func NewGroup(backends *UserSession, groupname common.Groupname) (int, error) {
+	if groupname.Realm == "pve" {
+		return backends.PVE.NewGroup(groupname)
+	} else if groupname.Realm == backends.Realm.Name {
+		realm_handler := backends.Realm.Handler.(common.Backend)
+		code, err := realm_handler.NewGroup(groupname)
 		if err != nil {
 			return code, err
 		}
-
-		//pve sync
-		return backends.pve.SyncRealms()
+		return backends.PVE.SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
 	}
-	return 200, nil
 }
 
-func DelGroup(backends *Backends, groupname common.Groupname) (int, error) {
-	handler := Config.Realms[groupname.Realm].Handler
-	switch handler {
-	case "pve":
-		return backends.pve.DelGroup(groupname)
-	case "ldap":
-		code, err := backends.ldap.DelGroup(groupname)
+func DelGroup(backends *UserSession, groupname common.Groupname) (int, error) {
+	if groupname.Realm == "pve" {
+		return backends.PVE.DelGroup(groupname)
+	} else if groupname.Realm == backends.Realm.Name {
+		realm_handler := backends.Realm.Handler.(common.Backend)
+		code, err := realm_handler.DelGroup(groupname)
 		if err != nil {
 			return code, err
 		}
-
-		//pve sync
-		return backends.pve.SyncRealms()
+		return backends.PVE.SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
 	}
-	return 200, nil
 }
 
-func AddGroupToPool(backends *Backends, groupname common.Groupname, poolname string) (int, error) {
+func AddGroupToPool(backends *UserSession, groupname common.Groupname, poolname string) (int, error) {
 	// only pve backend handles pool-group membership
-	return backends.pve.AddGroupToPool(groupname, poolname)
+	return backends.PVE.AddGroupToPool(groupname, poolname)
 }
 
-func DelGroupFromPool(backends *Backends, groupname common.Groupname, poolname string) (int, error) {
+func DelGroupFromPool(backends *UserSession, groupname common.Groupname, poolname string) (int, error) {
 	// only pve backend handles pool-group membership
-	return backends.pve.DelGroupFromPool(groupname, poolname)
+	return backends.PVE.DelGroupFromPool(groupname, poolname)
 }
 
-func NewUser(backends *Backends, username common.Username, user common.User) (int, error) {
-	handler := Config.Realms[username.Realm].Handler
-	switch handler {
-	case "pve":
-		return backends.pve.NewUser(username, user)
-	case "ldap":
-		code, err := backends.ldap.NewUser(username, user)
+func NewUser(backends *UserSession, username common.Username, user common.User) (int, error) {
+	if username.Realm == "pve" {
+		return backends.PVE.NewUser(username, user)
+	} else if username.Realm == backends.Realm.Name {
+		realm_handler := backends.Realm.Handler.(common.Backend)
+		code, err := realm_handler.NewUser(username, user)
 		if err != nil {
 			return code, err
 		}
-
-		//pve sync
-		return backends.pve.SyncRealms()
+		return backends.PVE.SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
-	return 200, nil
 }
 
-func DelUser(backends *Backends, username common.Username) (int, error) {
-	handler := Config.Realms[username.Realm].Handler
-	switch handler {
-	case "pve":
-		return backends.pve.DelUser(username)
-	case "ldap":
-		code, err := backends.ldap.DelUser(username)
+func DelUser(backends *UserSession, username common.Username) (int, error) {
+	if username.Realm == "pve" {
+		return backends.PVE.DelUser(username)
+	} else if username.Realm == backends.Realm.Name {
+		realm_handler := backends.Realm.Handler.(common.Backend)
+		code, err := realm_handler.DelUser(username)
 		if err != nil {
 			return code, err
 		}
-
-		//pve sync
-		return backends.pve.SyncRealms()
+		return backends.PVE.SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
-	return 200, nil
 }
 
-func AddUserToGroup(backends *Backends, username common.Username, groupname common.Groupname) (int, error) {
-	handler := Config.Realms[username.Realm].Handler
-	switch handler {
-	case "pve":
-		return backends.pve.AddUserToGroup(username, groupname)
-	case "ldap":
-		code, err := backends.ldap.AddUserToGroup(username, groupname)
+func AddUserToGroup(backends *UserSession, username common.Username, groupname common.Groupname) (int, error) {
+	if username.Realm == "pve" && groupname.Realm == "pve" { // both requested user and requested group are in proxmox
+		return backends.PVE.AddUserToGroup(username, groupname)
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == "pve" { // requested user is in user's realm but group is in proxmox
+		return backends.PVE.AddUserToGroup(username, groupname)
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both requested user and requested group are in user's realm
+		realm_handler := backends.Realm.Handler.(common.Backend)
+		code, err := realm_handler.AddUserToGroup(username, groupname)
 		if err != nil {
 			return code, err
 		}
-
-		//pve sync
-		return backends.pve.SyncRealms()
+		return backends.PVE.SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("cannot add a pve user to a group in %s", groupname.Realm)
 	}
-	return 200, nil
 }
 
-func DelUserFromGroup(backends *Backends, username common.Username, groupname common.Groupname) (int, error) {
-	handler := Config.Realms[username.Realm].Handler
-	switch handler {
-	case "pve":
-		return backends.pve.DelUserFromGroup(username, groupname)
-	case "ldap":
-		code, err := backends.ldap.DelUserFromGroup(username, groupname)
+func DelUserFromGroup(backends *UserSession, username common.Username, groupname common.Groupname) (int, error) {
+	if username.Realm == "pve" && groupname.Realm == "pve" { // both requested user and requested group are in proxmox
+		return backends.PVE.DelUserFromGroup(username, groupname)
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == "pve" { // requested user is in user's realm but group is in proxmox
+		return backends.PVE.DelUserFromGroup(username, groupname)
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both requested user and requested group are in user's realm
+		realm_handler := backends.Realm.Handler.(common.Backend)
+		code, err := realm_handler.DelUserFromGroup(username, groupname)
 		if err != nil {
 			return code, err
 		}
-
-		//pve sync
-		return backends.pve.SyncRealms()
+		return backends.PVE.SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("cannot remove a pve user from a group in %s", groupname.Realm)
 	}
-	return 200, nil
 }

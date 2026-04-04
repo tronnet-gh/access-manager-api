@@ -5,19 +5,15 @@ import (
 	"os"
 )
 
-type LDAPConfig struct {
-	LdapURL  string `json:"ldapURL"`
-	StartTLS bool   `json:"startTLS"`
-	BaseDN   string `json:"baseDN"`
-}
-
 type PVEConfig struct {
-	URL            string `json:"url"`
+	URL   string `json:"url"`
+	Token struct {
+		User  string `json:"user"`
+		Realm string `json:"realm"`
+		ID    string `json:"id"`
+		UUID  string `json:"uuid"`
+	} `json:"token"`
 	PAASClientRole string `json:"paas-client-role"`
-}
-
-type RealmConfig struct {
-	Handler string `json:"handler"`
 }
 
 type Config struct {
@@ -29,9 +25,7 @@ type Config struct {
 		Secure   bool   `json:"secure"`
 		MaxAge   int    `json:"maxAge"`
 	}
-	LDAP   LDAPConfig             `json:"ldap"`
-	PVE    PVEConfig              `json:"pve"`
-	Realms map[string]RealmConfig `json:"realms"`
+	PVE PVEConfig `json:"pve"`
 }
 
 func GetConfig(configPath string) (Config, error) {

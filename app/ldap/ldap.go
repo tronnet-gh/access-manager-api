@@ -13,12 +13,12 @@ import (
 
 // LDAPClient wrapper struct containing the connection, baseDN, peopleDN, and groupsDN
 type LDAPClient struct {
-	config *common.LDAPConfig
+	config *LDAPConfig
 	client *ldap.Conn
 }
 
 // returns a new LDAPClient from the config
-func NewClientFromCredentials(config common.LDAPConfig, username common.Username, password string) (*LDAPClient, int, error) {
+func NewClientFromCredentials(config LDAPConfig, username common.Username, password string) (*LDAPClient, int, error) {
 	LDAPConn, err := ldap.DialURL(config.LdapURL)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -256,4 +256,17 @@ func (l LDAPClient) DelUserFromGroup(username common.Username, groupname common.
 	}
 
 	return http.StatusOK, nil
+}
+
+func (l LDAPClient) NewPool(poolname string) (int, error) {
+	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
+}
+func (l LDAPClient) DelPool(poolname string) (int, error) {
+	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
+}
+func (l LDAPClient) AddGroupToPool(groupname common.Groupname, poolname string) (int, error) {
+	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
+}
+func (l LDAPClient) DelGroupFromPool(groupname common.Groupname, poolname string) (int, error) {
+	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }

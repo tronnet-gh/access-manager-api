@@ -5,22 +5,28 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	ldap "user-manager-api/app/ldap"
-	"user-manager-api/app/pve"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 
 	common "user-manager-api/app/common"
+	pve "user-manager-api/app/pve"
 )
 
-type Backends struct {
-	handler string
-	pve     *pve.ProxmoxClient
-	ldap    *ldap.LDAPClient
+type Realm struct {
+	Type   string
+	Config any
 }
 
-func GetBackendsFromContext(c *gin.Context) (*Backends, int, error) {
+type UserSession struct {
+	PVE   *pve.ProxmoxClient
+	Realm struct {
+		Name    string
+		Handler any
+	}
+}
+
+func GetUserSessionFromContext(c *gin.Context) (*UserSession, int, error) {
 	session := sessions.Default(c)
 	SessionUUID := session.Get("SessionUUID")
 	if SessionUUID == nil {
