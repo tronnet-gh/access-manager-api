@@ -8,7 +8,10 @@ require (
 	github.com/go-ldap/ldap/v3 v3.4.13
 	github.com/luthermonson/go-proxmox v0.4.1
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
+	proxmoxaas-common-lib v0.0.0
 )
+
+replace proxmoxaas-common-lib => ./proxmoxaas-common-lib
 
 require (
 	github.com/Azure/go-ntlmssp v0.1.0 // indirect

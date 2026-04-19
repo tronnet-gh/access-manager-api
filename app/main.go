@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	paas "proxmoxaas-common-lib"
 	common "user-manager-api/app/common"
 	ldap "user-manager-api/app/ldap"
 	pve "user-manager-api/app/pve"
@@ -58,7 +59,7 @@ func Run(configPath *string) {
 		}
 
 		// attempt to parse username
-		body.Username, err = common.ParseUsername(body.UsernameRaw)
+		body.Username, err = paas.ParseUsername(body.UsernameRaw)
 		if err != nil { // username format incorrect
 			c.JSON(http.StatusBadRequest, gin.H{"auth": false, "error": err.Error()})
 			return
@@ -167,7 +168,7 @@ func Run(configPath *string) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
 			return
 		}
-		groupname, err := common.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -193,7 +194,7 @@ func Run(configPath *string) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
 			return
 		}
-		groupname, err := common.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -225,7 +226,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		groupname, err := common.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -257,7 +258,7 @@ func Run(configPath *string) {
 			return
 		}
 
-		groupname, err := common.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
