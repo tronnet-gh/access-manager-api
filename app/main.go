@@ -168,6 +168,7 @@ func Run(configPath *string) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
 			return
 		}
+
 		groupname, err := paas.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
@@ -194,6 +195,7 @@ func Run(configPath *string) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
 			return
 		}
+
 		groupname, err := paas.ParseGroupname(groupid)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
@@ -217,9 +219,10 @@ func Run(configPath *string) {
 	router.POST("/pools/:poolid/groups/:groupid", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
 			return
 		}
+
 		groupid, ok := c.Params.Get("groupid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
@@ -249,9 +252,10 @@ func Run(configPath *string) {
 	router.DELETE("/pools/:poolid/groups/:groupid", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
 			return
 		}
+
 		groupid, ok := c.Params.Get("groupid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
@@ -271,6 +275,151 @@ func Run(configPath *string) {
 		}
 
 		code, err = DelGroupFromPool(backends, groupname, poolid)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.POST("/users/:userid", func(c *gin.Context) {
+		userid, ok := c.Params.Get("userid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+
+		username, err := paas.ParseUsername(userid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		backends, code, err := GetUserSessionFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		form := common.UserFormRequired{}
+		err = c.ShouldBind(&form)
+		if err != nil { // failed binding, usually missing form field
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		user := common.User{}
+		user.CN = form.CN
+		user.SN = form.SN
+		user.Mail = form.Mail
+		user.Password = form.Password
+
+		code, err = NewUser(backends, username, user)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.DELETE("/users/:userid", func(c *gin.Context) {
+		userid, ok := c.Params.Get("userid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+
+		username, err := paas.ParseUsername(userid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		backends, code, err := GetUserSessionFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		code, err = DelUser(backends, username)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.POST("/groups/:groupid/users/:userid", func(c *gin.Context) {
+		groupid, ok := c.Params.Get("groupid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+
+		userid, ok := c.Params.Get("userid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter userid")})
+			return
+		}
+
+		groupname, err := paas.ParseGroupname(groupid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		username, err := paas.ParseUsername(userid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		backends, code, err := GetUserSessionFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		code, err = AddUserToGroup(backends, username, groupname)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.Status(200)
+		}
+	})
+
+	router.DELETE("/groups/:groupid/users/:userid", func(c *gin.Context) {
+		groupid, ok := c.Params.Get("groupid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			return
+		}
+
+		userid, ok := c.Params.Get("userid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter userid")})
+			return
+		}
+
+		groupname, err := paas.ParseGroupname(groupid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		username, err := paas.ParseUsername(userid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err})
+			return
+		}
+
+		backends, code, err := GetUserSessionFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		code, err = DelUserFromGroup(backends, username, groupname)
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
