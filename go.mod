@@ -1,6 +1,6 @@
 module user-manager-api
 
-go 1.26.0
+go 1.26.2
 
 require (
 	github.com/gin-contrib/sessions v1.1.0
