@@ -1,0 +1,20 @@
+{
+    "listenPort": 8083,
+    "sessionCookieName": "PAASUserManagerTicket",
+    "sessionCookie": {
+        "path": "/",
+        "httpOnly": true,
+        "secure": false,
+        "maxAge": 7200
+    },
+    "pve": {
+        "url": "https://<proxmox host>/api2/json",
+        "token": {
+            "user": "proxmoxaas-api",
+            "realm": "pam",
+            "id": "token",
+            "uuid": "<secret-uuid>"
+        },
+        "paas-client-role": "<PAAS Client Role>"
+    }
+}
