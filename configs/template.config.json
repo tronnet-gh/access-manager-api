@@ -1,6 +1,6 @@
 {
     "listenPort": 8083,
-    "sessionCookieName": "PAASUserManagerTicket",
+    "sessionCookieName": "PAASAccessManagerTicket",
     "sessionCookie": {
         "path": "/",
         "httpOnly": true,

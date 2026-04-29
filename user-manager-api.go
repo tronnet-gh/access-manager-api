@@ -1,8 +1,8 @@
 package main
 
 import (
+	app "access-manager-api/app"
 	"flag"
-	app "user-manager-api/app"
 )
 
 func main() {

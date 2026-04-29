@@ -1,11 +1,11 @@
 package localdb
 
 import (
+	common "access-manager-api/app/common"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	common "user-manager-api/app/common"
 )
 
 type DB struct {

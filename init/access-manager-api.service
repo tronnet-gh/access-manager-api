@@ -1,9 +1,9 @@
 [Unit]
-Description=proxmoxaas-user-manager-api
+Description=access-manager-api
 After=network.target
 [Service]
 WorkingDirectory=/<path to dir>
-ExecStart=/<path to dir>/proxmoxaas-fabric
+ExecStart=/<path to dir>/access-manager-api
 Restart=always
 RestartSec=10
 Type=simple

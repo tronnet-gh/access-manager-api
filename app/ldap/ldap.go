@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-ldap/ldap/v3"
 
-	common "user-manager-api/app/common"
+	common "access-manager-api/app/common"
 )
 
 // LDAPClient wrapper struct containing the connection, baseDN, peopleDN, and groupsDN

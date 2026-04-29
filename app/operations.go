@@ -1,10 +1,10 @@
 package app
 
 import (
+	common "access-manager-api/app/common"
+	"access-manager-api/app/ldap"
 	"fmt"
 	"net/http"
-	common "user-manager-api/app/common"
-	"user-manager-api/app/ldap"
 )
 
 func NewPool(backends *UserSession, poolname string) (int, error) {

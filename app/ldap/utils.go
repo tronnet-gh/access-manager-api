@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-ldap/ldap/v3"
 
-	common "user-manager-api/app/common"
+	common "access-manager-api/app/common"
 )
 
 func LDAPEntryToUser(entry *ldap.Entry) common.User {

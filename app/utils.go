@@ -7,8 +7,8 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 
-	localdb "user-manager-api/app/localdb"
-	pve "user-manager-api/app/pve"
+	localdb "access-manager-api/app/localdb"
+	pve "access-manager-api/app/pve"
 )
 
 type Realm struct {

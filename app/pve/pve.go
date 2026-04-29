@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"slices"
 
-	common "user-manager-api/app/common"
+	common "access-manager-api/app/common"
 
 	"github.com/luthermonson/go-proxmox"
 )

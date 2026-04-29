@@ -9,11 +9,11 @@ import (
 	"net/http"
 	"strconv"
 
+	common "access-manager-api/app/common"
+	ldap "access-manager-api/app/ldap"
+	localdb "access-manager-api/app/localdb"
+	pve "access-manager-api/app/pve"
 	paas "proxmoxaas-common-lib"
-	common "user-manager-api/app/common"
-	ldap "user-manager-api/app/ldap"
-	localdb "user-manager-api/app/localdb"
-	pve "user-manager-api/app/pve"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -510,7 +510,7 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	log.Printf("Starting User Manager API on port %s\n", strconv.Itoa(Config.ListenPort))
+	log.Printf("Starting Access Manager API on port %s\n", strconv.Itoa(Config.ListenPort))
 
 	err = router.Run("0.0.0.0:" + strconv.Itoa(Config.ListenPort))
 	if err != nil {

@@ -1,4 +1,4 @@
-module user-manager-api
+module access-manager-api
 
 go 1.26.2
 
