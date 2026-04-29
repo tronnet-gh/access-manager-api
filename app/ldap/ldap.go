@@ -13,12 +13,12 @@ import (
 
 // LDAPClient wrapper struct containing the connection, baseDN, peopleDN, and groupsDN
 type LDAPClient struct {
-	config *LDAPConfig
+	config *common.LDAPConfig
 	client *ldap.Conn
 }
 
 // returns a new LDAPClient from the config
-func NewClientFromCredentials(config LDAPConfig, username common.Username, password string) (*LDAPClient, int, error) {
+func NewClientFromCredentials(config common.LDAPConfig, username common.Username, password string) (*LDAPClient, int, error) {
 	LDAPConn, err := ldap.DialURL(config.LdapURL)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -65,6 +65,7 @@ func (l LDAPClient) GetUser(username common.Username) (common.User, int, error) 
 	entry := searchResponse.Entries[0]
 
 	user = LDAPEntryToUser(entry)
+	user.Username = username
 
 	return user, http.StatusOK, nil
 }
@@ -146,8 +147,9 @@ func (l LDAPClient) DelUser(username common.Username) (int, error) {
 	return http.StatusOK, nil
 }
 
-func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, int, error) {
+func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, []string, int, error) {
 	group := common.Group{}
+	members := []string{}
 
 	searchRequest := ldap.NewSearchRequest( //  setup search for user by uid
 		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN), // The base dn to search
@@ -159,13 +161,18 @@ func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, int, err
 
 	searchResponse, err := l.client.Search(searchRequest) // perform search
 	if err != nil {
-		return group, http.StatusBadRequest, err
+		return group, members, http.StatusBadRequest, err
 	}
 
 	entry := searchResponse.Entries[0]
 	group = LDAPEntryToGroup(entry)
-
-	return group, http.StatusOK, nil
+	group.Groupname = groupname
+	for _, member := range entry.GetAttributeValues("member") {
+		if member != "" {
+			members = append(members, member)
+		}
+	}
+	return group, members, http.StatusOK, nil
 }
 
 func (l LDAPClient) NewGroup(groupname common.Groupname) (int, error) {
@@ -261,12 +268,19 @@ func (l LDAPClient) DelUserFromGroup(username common.Username, groupname common.
 func (l LDAPClient) NewPool(poolname string) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }
+
+func (l LDAPClient) GetPool(poolname string) (common.Pool, []string, int, error) {
+	return common.Pool{}, []string{}, http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
+}
+
 func (l LDAPClient) DelPool(poolname string) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }
+
 func (l LDAPClient) AddGroupToPool(groupname common.Groupname, poolname string) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }
+
 func (l LDAPClient) DelGroupFromPool(groupname common.Groupname, poolname string) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }

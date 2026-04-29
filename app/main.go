@@ -12,6 +12,7 @@ import (
 	paas "proxmoxaas-common-lib"
 	common "user-manager-api/app/common"
 	ldap "user-manager-api/app/ldap"
+	localdb "user-manager-api/app/localdb"
 	pve "user-manager-api/app/pve"
 
 	"github.com/gin-contrib/sessions"
@@ -26,7 +27,7 @@ var Config common.Config
 var UserSessions map[string]*UserSession
 var Realms map[string]Realm
 
-func Run(configPath *string) {
+func Run(configPath *string, localDBPath *string) {
 	// load config values
 	var err error
 	Config, err = common.GetConfig(*configPath)
@@ -34,6 +35,13 @@ func Run(configPath *string) {
 		log.Fatalf("Error when reading config file: %s\n", err)
 	}
 	log.Printf("Read in config from %s\n", *configPath)
+
+	// load localdb
+	db, err := localdb.LoadDB(*localDBPath)
+	if err != nil {
+		log.Fatalf("Error when reading localdb file: %s\n", err)
+	}
+	log.Printf("Read in localdb from %s\n", *localDBPath)
 
 	// setup router
 	gin.SetMode(gin.ReleaseMode)
@@ -47,7 +55,7 @@ func Run(configPath *string) {
 	UserSessions = make(map[string]*UserSession)
 
 	router.GET("/version", func(c *gin.Context) {
-		c.JSON(200, gin.H{"version": Version})
+		c.JSON(http.StatusOK, gin.H{"version": Version})
 	})
 
 	router.POST("/ticket", func(c *gin.Context) {
@@ -78,7 +86,7 @@ func Run(configPath *string) {
 
 		// bind ldap backend if backend is ldap
 		if handler == "ldap" {
-			config := Realms[body.Username.Realm].Config.(ldap.LDAPConfig)
+			config := Realms[body.Username.Realm].Config.(common.LDAPConfig)
 			LDAPClient, code, err := ldap.NewClientFromCredentials(config, body.Username, body.Password)
 			if err != nil { // ldap client failed to bind
 				c.JSON(code, gin.H{"auth": false, "error": err.Error()})
@@ -87,6 +95,8 @@ func Run(configPath *string) {
 			userbackends.Realm.Name = body.Username.Realm
 			userbackends.Realm.Handler = LDAPClient
 		}
+
+		userbackends.DB = &db
 
 		// successful binding at this point
 		// create new session
@@ -120,6 +130,27 @@ func Run(configPath *string) {
 		c.JSON(http.StatusUnauthorized, gin.H{"auth": false})
 	})
 
+	router.GET("/pools/:poolid", func(c *gin.Context) {
+		poolid, ok := c.Params.Get("poolid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			return
+		}
+
+		backends, code, err := GetUserSessionFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		pool, code, err := GetPool(backends, poolid)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"pool": pool})
+		}
+	})
+
 	router.POST("/pools/:poolid", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
@@ -137,7 +168,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -158,7 +189,33 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
+		}
+	})
+
+	router.GET("/groups/:groupid", func(c *gin.Context) {
+		groupid, ok := c.Params.Get("groupid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			return
+		}
+
+		groupname, err := common.ParseGroupname(groupid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+
+		backends, code, err := GetUserSessionFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		group, code, err := GetGroup(backends, groupname)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"group": group})
 		}
 	})
 
@@ -185,7 +242,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -212,7 +269,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -245,7 +302,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -278,7 +335,33 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
+		}
+	})
+
+	router.GET("/users/:userid", func(c *gin.Context) {
+		userid, ok := c.Params.Get("userid")
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			return
+		}
+
+		username, err := common.ParseUsername(userid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		}
+
+		backends, code, err := GetUserSessionFromContext(c)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+			return
+		}
+
+		user, code, err := GetUser(backends, username)
+		if err != nil {
+			c.JSON(code, gin.H{"error": err.Error()})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"user": user})
 		}
 	})
 
@@ -318,7 +401,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -345,7 +428,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -384,7 +467,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -423,7 +506,7 @@ func Run(configPath *string) {
 		if err != nil {
 			c.JSON(code, gin.H{"error": err.Error()})
 		} else {
-			c.Status(200)
+			c.Status(http.StatusOK)
 		}
 	})
 
@@ -496,7 +579,7 @@ func GetRealmsFromPVE(config *common.Config) map[string]Realm {
 		}
 
 		if realm.Type == "ldap" {
-			ldapconfig := ldap.LDAPConfig{
+			ldapconfig := common.LDAPConfig{
 				BaseDN:   realm.BaseDN,
 				LdapURL:  fmt.Sprintf("ldap://%s", realm.Server1),
 				StartTLS: realm.Mode == "ldap+starttls",

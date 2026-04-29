@@ -39,16 +39,15 @@ func NewClientFromCredentials(config common.PVEConfig, username common.Username,
 		return nil, http.StatusUnauthorized, err
 	}
 
-	// todo this should return an error code if the binding failed (ie fetch version to check if the auth was actually ok)
 	return &ProxmoxClient{config: &config, client: client}, http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) SyncRealms() (int, error) {
 	domains, err := pve.client.Domains(context.Background())
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	}
 	for _, domain := range domains {
 		if domain.Type != "pam" && domain.Type != "pve" { // pam and pve are not external realm types that require sync
@@ -59,41 +58,73 @@ func (pve ProxmoxClient) SyncRealms() (int, error) {
 				RemoveVanished: "acl;entry;properties", // remove deleted objects from ACL, entry in pve, and remove properties (probably not necessary)
 			})
 			if proxmox.IsNotAuthorized(err) {
-				return 401, err
+				return http.StatusUnauthorized, err
 			} else if err != nil {
-				return 500, err
+				return http.StatusInternalServerError, err
 			}
 		}
 	}
-	return 200, nil
+	return http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) NewPool(poolname string) (int, error) {
 	err := pve.client.NewPool(context.Background(), poolname, "")
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
+}
+
+func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []string, int, error) {
+	pool := common.Pool{}
+	members := []string{}
+
+	pvepool, err := pve.client.Pool(context.Background(), poolname)
+	if proxmox.IsNotFound(err) { // errors if pool does not exist
+		return pool, members, http.StatusNotFound, err
+	} else if err != nil {
+		return pool, members, http.StatusInternalServerError, err
+	}
+
+	pool.PoolID = pvepool.PoolID
+
+	acls, err := pve.client.ACL(context.Background())
+	if proxmox.IsNotAuthorized(err) { // errors if pool does not exist
+		return pool, members, http.StatusUnauthorized, err
+	} else if err != nil {
+		return pool, members, http.StatusInternalServerError, err
+	}
+
+	// iterate through ACLs and get superficial pool - group membershipm (just group names)
+	for _, acl := range acls {
+		if acl.Type == "group" && acl.RoleID == pve.config.PAASClientRole && acl.Path == fmt.Sprintf("/pool/%s", poolname) {
+			members = append(members, acl.UGID)
+		}
+	}
+
+	return pool, members, http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) DelPool(poolname string) (int, error) {
 	pvepool, err := pve.client.Pool(context.Background(), poolname)
-	if proxmox.IsNotFound(err) { // errors if pool does not exist
-		return 404, err
+	if proxmox.IsNotAuthorized(err) { // not authorized to delete
+		return http.StatusUnauthorized, err
+	} else if proxmox.IsNotFound(err) { // errors if pool does not exist
+		return http.StatusNotFound, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	}
 
 	err = pvepool.Delete(context.Background())
 	if proxmox.IsNotAuthorized(err) { // not authorized to delete
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
 }
 
@@ -101,29 +132,50 @@ func (pve ProxmoxClient) NewGroup(groupname common.Groupname) (int, error) {
 	// add new group ny ID only
 	err := pve.client.NewGroup(context.Background(), groupname.GroupID, "")
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
+}
+
+func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []string, int, error) {
+	group := common.Group{}
+	members := []string{}
+	pvegroup, err := pve.client.Group(context.Background(), groupname.ToString())
+	if proxmox.IsNotFound(err) { // errors if pool does not exist
+		return group, members, http.StatusNotFound, err
+	} else if err != nil {
+		return group, members, http.StatusInternalServerError, err
+	}
+
+	group.Groupname, _ = common.ParseGroupname(pvegroup.GroupID)
+
+	for _, userid := range pvegroup.Members {
+		members = append(members, userid)
+	}
+
+	return group, members, http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) DelGroup(groupname common.Groupname) (int, error) {
 	pvegroup, err := pve.client.Group(context.Background(), groupname.GroupID)
-	if proxmox.IsNotFound(err) { // errors if group does not exist
-		return 404, err
+	if proxmox.IsNotAuthorized(err) {
+		return http.StatusUnauthorized, err
+	} else if proxmox.IsNotFound(err) {
+		return http.StatusNotFound, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	}
 
 	err = pvegroup.Delete(context.Background())
 	if proxmox.IsNotAuthorized(err) { // not authorized to delete
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
 }
 
@@ -137,11 +189,11 @@ func (pve ProxmoxClient) AddGroupToPool(groupname common.Groupname, poolname str
 	})
 
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
 }
 
@@ -155,11 +207,11 @@ func (pve ProxmoxClient) DelGroupFromPool(groupname common.Groupname, poolname s
 	})
 
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
 }
 
@@ -172,39 +224,59 @@ func (pve ProxmoxClient) NewUser(username common.Username, user common.User) (in
 		Password:  user.Password,
 	})
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err
+		return http.StatusUnauthorized, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
+	}
+}
+
+func (pve ProxmoxClient) GetUser(username common.Username) (common.User, int, error) {
+	user := common.User{}
+	pveuser, err := pve.client.User(context.Background(), username.ToString())
+	if proxmox.IsNotFound(err) { // errors if pool does not exist
+		return user, http.StatusNotFound, err
+	} else if err != nil {
+		return user, http.StatusInternalServerError, err
+	} else {
+		user.Username, _ = common.ParseUsername(pveuser.UserID)
+		user.CN = pveuser.Firstname
+		user.SN = pveuser.Lastname
+		user.Mail = pveuser.Email
+		return user, http.StatusOK, nil
 	}
 }
 
 func (pve ProxmoxClient) DelUser(username common.Username) (int, error) {
 	user, err := pve.client.User(context.Background(), username.ToString())
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err // not authorized to read the user = not authorized to delete the user, this may be slightly different from ldap
+		return http.StatusUnauthorized, err
+	} else if proxmox.IsNotFound(err) {
+		return http.StatusNotFound, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	}
 
 	// assume that user cannot be nil if no error was returned
 	err = user.Delete(context.Background())
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err // not authorized to delete the user
+		return http.StatusUnauthorized, err // not authorized to delete the user
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
 }
 
 func (pve ProxmoxClient) AddUserToGroup(username common.Username, groupname common.Groupname) (int, error) {
-	user, err := pve.client.User(context.Background(), groupname.ToString())
+	user, err := pve.client.User(context.Background(), username.ToString())
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err // not authorized to read the user = not authorized to delete the user, this may be slightly different from ldap
+		return http.StatusUnauthorized, err
+	} else if proxmox.IsNotFound(err) {
+		return http.StatusNotFound, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	}
 
 	newGroups := append(user.Groups, groupname.ToString())
@@ -213,20 +285,22 @@ func (pve ProxmoxClient) AddUserToGroup(username common.Username, groupname comm
 		Groups: newGroups,
 	})
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err // not authorized to delete the user
+		return http.StatusUnauthorized, err // not authorized to delete the user
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
 }
 
 func (pve ProxmoxClient) DelUserFromGroup(username common.Username, groupname common.Groupname) (int, error) {
-	user, err := pve.client.User(context.Background(), groupname.ToString())
+	user, err := pve.client.User(context.Background(), username.ToString())
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err // not authorized to read the user = not authorized to delete the user, this may be slightly different from ldap
+		return http.StatusUnauthorized, err
+	} else if proxmox.IsNotFound(err) {
+		return http.StatusNotFound, err
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	}
 
 	idx := slices.Index(user.Groups, groupname.ToString())
@@ -239,10 +313,10 @@ func (pve ProxmoxClient) DelUserFromGroup(username common.Username, groupname co
 		Groups: newGroups,
 	})
 	if proxmox.IsNotAuthorized(err) {
-		return 401, err // not authorized to delete the user
+		return http.StatusUnauthorized, err // not authorized to delete the user
 	} else if err != nil {
-		return 500, err
+		return http.StatusInternalServerError, err
 	} else {
-		return 200, nil
+		return http.StatusOK, nil
 	}
 }

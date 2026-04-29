@@ -16,6 +16,12 @@ type PVEConfig struct {
 	PAASClientRole string `json:"paas-client-role"`
 }
 
+type LDAPConfig struct {
+	BaseDN   string `json:""`
+	LdapURL  string
+	StartTLS bool
+}
+
 type Config struct {
 	ListenPort        int    `json:"listenPort"`
 	SessionCookieName string `json:"sessionCookieName"`

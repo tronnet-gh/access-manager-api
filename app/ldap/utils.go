@@ -1,17 +1,15 @@
 package ldap
 
 import (
+	"fmt"
+	"net/http"
+	"regexp"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-ldap/ldap/v3"
 
 	common "user-manager-api/app/common"
 )
-
-type LDAPConfig struct {
-	BaseDN   string
-	LdapURL  string
-	StartTLS bool
-}
 
 func LDAPEntryToUser(entry *ldap.Entry) common.User {
 	return common.User{
@@ -37,9 +35,18 @@ func ParseLDAPError(err error) gin.H {
 	} else {
 		return gin.H{
 			"ok":      true,
-			"code":    200,
+			"code":    http.StatusOK,
 			"result":  "OK",
 			"message": "",
 		}
 	}
+}
+
+func ExtractUIDFromUserDN(dn string) (string, error) {
+	m := regexp.MustCompilePOSIX("uid=([[:alnum:]]+)")
+	x := m.FindStringSubmatch(dn)
+	if len(x) != 2 {
+		return "", fmt.Errorf("could not find uid in dn %s", dn)
+	}
+	return x[1], nil
 }
