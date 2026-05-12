@@ -582,7 +582,7 @@ func GetRealmsFromPVE(config *common.Config) map[string]Realm {
 			ldapconfig := common.LDAPConfig{
 				BaseDN:   realm.BaseDN,
 				LdapURL:  fmt.Sprintf("ldap://%s", realm.Server1),
-				StartTLS: realm.Mode == "ldap+starttls",
+				StartTLS: false, // todo fix startlts
 			}
 			realms[realm.Realm] = Realm{
 				Type:   realm.Type,
