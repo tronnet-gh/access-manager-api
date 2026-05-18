@@ -6,7 +6,7 @@ require (
 	github.com/gin-contrib/sessions v1.1.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ldap/ldap/v3 v3.4.13
-	github.com/luthermonson/go-proxmox v0.5.0
+	github.com/luthermonson/go-proxmox v0.5.1
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
 	proxmoxaas-common-lib v0.0.0
 )
@@ -20,7 +20,7 @@ require (
 	github.com/bytedance/sonic v1.15.1 // indirect
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cloudwego/base64x v0.1.7 // indirect
-	github.com/diskfs/go-diskfs v1.9.2 // indirect
+	github.com/diskfs/go-diskfs v1.9.3 // indirect
 	github.com/djherbis/times v1.6.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/gin-contrib/sse v1.1.1 // indirect
