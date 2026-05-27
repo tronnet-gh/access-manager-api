@@ -108,9 +108,13 @@ func Run(configPath *string, localDBPath *string) {
 		// set uuid mapping in LDAPSessions
 		UserSessions[uuid.String()] = &userbackends
 		// save the session
-		session.Save()
-		// return successful auth
-		c.JSON(http.StatusOK, gin.H{"auth": true})
+		err = session.Save()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"auth": false})
+		} else {
+			// return successful auth
+			c.JSON(http.StatusOK, gin.H{"auth": true})
+		}
 	})
 
 	router.DELETE("/ticket", func(c *gin.Context) {
@@ -124,10 +128,14 @@ func Run(configPath *string, localDBPath *string) {
 		uuid := SessionUUID.(string)
 
 		// delete uuid entry from user sessions
-		delete(UserSessions, uuid)
+		delete(UserSessions, uuid)                    // deletes uuid mapping
 		session.Options(sessions.Options{MaxAge: -1}) // set max age to -1 so session cookie is deleted
-		session.Save()
-		c.JSON(http.StatusUnauthorized, gin.H{"auth": false})
+		err := session.Save()                         // if save somehow fails, it should be ok since the uuid mapping is already deleted
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"auth": false})
+		} else {
+			c.JSON(http.StatusUnauthorized, gin.H{"auth": false})
+		}
 	})
 
 	router.GET("/pools/:poolid", func(c *gin.Context) {
