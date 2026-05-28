@@ -25,7 +25,7 @@ func NewClientFromCredentials(config common.LDAPConfig, username common.Username
 	}
 
 	if config.StartTLS {
-		err = LDAPConn.StartTLS(&tls.Config{InsecureSkipVerify: true})
+		err = LDAPConn.StartTLS(&tls.Config{})
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}

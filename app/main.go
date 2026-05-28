@@ -30,10 +30,8 @@ var Realms map[string]Realm
 func Run(configPath *string, localDBPath *string) {
 	// load config values
 	var err error
-	Config, err = common.GetConfig(*configPath)
-	if err != nil {
-		log.Fatalf("Error when reading config file: %s\n", err)
-	}
+	Config = common.GetConfig(*configPath)
+	// already exits if failed
 	log.Printf("Read in config from %s\n", *configPath)
 
 	// load localdb
@@ -551,9 +549,7 @@ func GetRealmsFromPVE(config *common.Config) map[string]Realm {
 
 	HTTPClient := http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+			TLSClientConfig: &tls.Config{},
 		},
 	}
 	token := fmt.Sprintf(`%s@%s!%s`, config.PVE.Token.User, config.PVE.Token.Realm, config.PVE.Token.ID)

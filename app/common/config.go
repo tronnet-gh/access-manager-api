@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 )
 
@@ -34,15 +35,23 @@ type Config struct {
 	PVE PVEConfig `json:"pve"`
 }
 
-func GetConfig(configPath string) (Config, error) {
-	content, err := os.ReadFile(configPath)
+func GetConfig(configPath string) Config {
+	root, err := os.OpenRoot(".")
 	if err != nil {
-		return Config{}, err
+		log.Fatal("Error when opening root dir: ", err)
 	}
+	defer root.Close()
+
+	content, err := root.ReadFile(configPath)
+	if err != nil {
+		log.Fatal("Error when opening config file: ", err)
+	}
+
 	var config Config
 	err = json.Unmarshal(content, &config)
 	if err != nil {
-		return Config{}, err
+		log.Fatal("Error during parsing config file: ", err)
 	}
-	return config, nil
+
+	return config
 }

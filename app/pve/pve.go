@@ -21,9 +21,7 @@ type ProxmoxClient struct {
 func NewClientFromCredentials(config common.PVEConfig, username common.Username, password string) (*ProxmoxClient, int, error) {
 	HTTPClient := http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
+			TLSClientConfig: &tls.Config{},
 		},
 	}
 

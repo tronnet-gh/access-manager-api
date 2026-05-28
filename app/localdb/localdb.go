@@ -14,14 +14,20 @@ type DB struct {
 
 func LoadDB(localDBPath string) (DB, error) {
 	db := DB{}
-	content, err := os.ReadFile(localDBPath)
+
+	root, err := os.OpenRoot(".")
 	if err != nil {
-		//log.Fatal("Error when opening file: ", err)
 		return db, err
 	}
+	defer root.Close()
+
+	content, err := root.ReadFile(localDBPath)
+	if err != nil {
+		return db, err
+	}
+
 	err = json.Unmarshal(content, &db.data)
 	if err != nil {
-		//log.Fatal("Error during Unmarshal(): ", err)
 		return db, err
 	}
 	return db, nil
@@ -32,7 +38,7 @@ func SaveDB(localDBPath string, db DB) error {
 	if err != nil {
 		return err
 	}
-	err = os.WriteFile(localDBPath, []byte(json), 0644)
+	err = os.WriteFile(localDBPath, []byte(json), 0600)
 	return err
 }
 
