@@ -28,6 +28,7 @@ func NewClientFromCredentials(config common.PVEConfig, username common.Username,
 	client := proxmox.NewClient(config.URL,
 		proxmox.WithHTTPClient(&HTTPClient),
 		proxmox.WithCredentials(&proxmox.Credentials{Username: username.UserID, Realm: username.Realm, Password: password}),
+		proxmox.WithEagerAuth(),
 	)
 
 	// check that the user is authenticated because proxmox.NewClient does not return an error
@@ -49,11 +50,13 @@ func (pve ProxmoxClient) SyncRealms() (int, error) {
 	}
 	for _, domain := range domains {
 		if domain.Type != "pam" && domain.Type != "pve" { // pam and pve are not external realm types that require sync
+			e := proxmox.IntOrBool(true)
+			r := string("acl;entry;properties")
 			err := domain.Sync(context.Background(), proxmox.DomainSyncOptions{
-				DryRun:         false,                  // we want to make modifications
-				EnableNew:      true,                   // allow new users and groups
-				Scope:          "both",                 // allow new users and groups
-				RemoveVanished: "acl;entry;properties", // remove deleted objects from ACL, entry in pve, and remove properties (probably not necessary)
+				DryRun:         false,  // we want to make modifications
+				EnableNew:      &e,     // allow new users and groups
+				Scope:          "both", // allow new users and groups
+				RemoveVanished: &r,     // remove deleted objects from ACL, entry in pve, and remove properties (probably not necessary)
 			})
 			if proxmox.IsNotAuthorized(err) {
 				return http.StatusUnauthorized, err
