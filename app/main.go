@@ -199,14 +199,14 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.GET("/groups/:groupid", func(c *gin.Context) {
-		groupid, ok := c.Params.Get("groupid")
+	router.GET("/groups/:groupname", func(c *gin.Context) {
+		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
 			return
 		}
 
-		groupname, err := common.ParseGroupname(groupid)
+		groupname, err := common.ParseGroupname(groupname_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		}
@@ -225,14 +225,14 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.POST("/groups/:groupid", func(c *gin.Context) {
-		groupid, ok := c.Params.Get("groupid")
+	router.POST("/groups/:groupname", func(c *gin.Context) {
+		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		groupname, err := paas.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupname_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -252,14 +252,14 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.DELETE("/groups/:groupid", func(c *gin.Context) {
-		groupid, ok := c.Params.Get("groupid")
+	router.DELETE("/groups/:groupname", func(c *gin.Context) {
+		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		groupname, err := paas.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupname_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -279,20 +279,20 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.POST("/pools/:poolid/groups/:groupid", func(c *gin.Context) {
+	router.POST("/pools/:poolid/groups/:groupname", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
 			return
 		}
 
-		groupid, ok := c.Params.Get("groupid")
+		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		groupname, err := paas.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupname_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -312,20 +312,20 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.DELETE("/pools/:poolid/groups/:groupid", func(c *gin.Context) {
+	router.DELETE("/pools/:poolid/groups/:groupname", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
 			return
 		}
 
-		groupid, ok := c.Params.Get("groupid")
+		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		groupname, err := paas.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupname_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -345,14 +345,14 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.GET("/users/:userid", func(c *gin.Context) {
-		userid, ok := c.Params.Get("userid")
+	router.GET("/users/:username", func(c *gin.Context) {
+		username_str, ok := c.Params.Get("username")
 		if !ok {
 			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
 			return
 		}
 
-		username, err := common.ParseUsername(userid)
+		username, err := common.ParseUsername(username_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		}
@@ -371,14 +371,14 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.POST("/users/:userid", func(c *gin.Context) {
-		userid, ok := c.Params.Get("userid")
+	router.POST("/users/:username", func(c *gin.Context) {
+		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		username, err := paas.ParseUsername(userid)
+		username, err := paas.ParseUsername(username_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -411,14 +411,14 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.DELETE("/users/:userid", func(c *gin.Context) {
-		userid, ok := c.Params.Get("userid")
+	router.DELETE("/users/:username", func(c *gin.Context) {
+		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		username, err := paas.ParseUsername(userid)
+		username, err := paas.ParseUsername(username_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -438,26 +438,26 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.POST("/groups/:groupid/users/:userid", func(c *gin.Context) {
-		groupid, ok := c.Params.Get("groupid")
+	router.POST("/groups/:groupname/users/:username", func(c *gin.Context) {
+		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		userid, ok := c.Params.Get("userid")
+		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter userid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter username")})
 			return
 		}
 
-		groupname, err := paas.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupname_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
 		}
 
-		username, err := paas.ParseUsername(userid)
+		username, err := paas.ParseUsername(username_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -477,26 +477,26 @@ func Run(configPath *string, localDBPath *string) {
 		}
 	})
 
-	router.DELETE("/groups/:groupid/users/:userid", func(c *gin.Context) {
-		groupid, ok := c.Params.Get("groupid")
+	router.DELETE("/groups/:groupname/users/:username", func(c *gin.Context) {
+		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
 			return
 		}
 
-		userid, ok := c.Params.Get("userid")
+		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter userid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter username")})
 			return
 		}
 
-		groupname, err := paas.ParseGroupname(groupid)
+		groupname, err := paas.ParseGroupname(groupname_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
 		}
 
-		username, err := paas.ParseUsername(userid)
+		username, err := paas.ParseUsername(username_str)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err})
 			return
@@ -585,8 +585,10 @@ func GetRealmsFromPVE(config *common.Config) map[string]Realm {
 		if realm.Type == "ldap" {
 			ldapconfig := common.LDAPConfig{
 				BaseDN:   realm.BaseDN,
-				LdapURL:  fmt.Sprintf("ldap://%s", realm.Server1),
-				StartTLS: false, // todo fix startlts
+				Hostname: realm.Server1,
+				TLS:      realm.Mode == "ldaps",
+				StartTLS: realm.Mode == "ldap+starttls",
+				Verify:   bool(realm.Verify),
 			}
 			realms[realm.Realm] = Realm{
 				Type:   realm.Type,

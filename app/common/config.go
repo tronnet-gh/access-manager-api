@@ -19,8 +19,10 @@ type PVEConfig struct {
 
 type LDAPConfig struct {
 	BaseDN   string `json:""`
-	LdapURL  string
+	Hostname string
 	StartTLS bool
+	TLS      bool
+	Verify   bool
 }
 
 type Config struct {

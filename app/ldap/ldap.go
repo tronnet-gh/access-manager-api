@@ -19,30 +19,50 @@ type LDAPClient struct {
 
 // returns a new LDAPClient from the config
 func NewClientFromCredentials(config common.LDAPConfig, username common.Username, password string) (*LDAPClient, int, error) {
-	LDAPConn, err := ldap.DialURL(config.LdapURL)
-	if err != nil {
-		return nil, http.StatusInternalServerError, err
-	}
+	ldapclient := LDAPClient{}
 
-	if config.StartTLS {
-		err = LDAPConn.StartTLS(&tls.Config{})
+	if config.TLS {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: !config.Verify,
+		}
+		url := fmt.Sprintf("ldaps://%s", config.Hostname)
+		LDAPConn, err := ldap.DialURL(url, ldap.DialWithTLSConfig(tlsConfig))
 		if err != nil {
 			return nil, http.StatusInternalServerError, err
 		}
+		ldapclient.config = &config
+		ldapclient.client = LDAPConn
+	} else if config.StartTLS {
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: !config.Verify,
+		}
+		url := fmt.Sprintf("ldap://%s", config.Hostname)
+		LDAPConn, err := ldap.DialURL(url)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		err = LDAPConn.StartTLS(tlsConfig)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		ldapclient.config = &config
+		ldapclient.client = LDAPConn
+	} else {
+		url := fmt.Sprintf("ldap://%s", config.Hostname)
+		LDAPConn, err := ldap.DialURL(url)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+		ldapclient.config = &config
+		ldapclient.client = LDAPConn
 	}
 
-	ldap := LDAPClient{
-		config: &config,
-		client: LDAPConn,
-	}
-
-	userdn := fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, ldap.config.BaseDN)
-	err = ldap.client.Bind(userdn, password)
-
+	userdn := fmt.Sprintf("uid=%s,ou=people,%s", username.UserID, ldapclient.config.BaseDN)
+	err := ldapclient.client.Bind(userdn, password)
 	if err != nil {
 		return nil, http.StatusUnauthorized, err
 	} else {
-		return &ldap, http.StatusOK, nil
+		return &ldapclient, http.StatusOK, nil
 	}
 }
 
