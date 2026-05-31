@@ -6,13 +6,12 @@ require (
 	github.com/gin-contrib/sessions v1.1.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ldap/ldap/v3 v3.4.13
-	github.com/luthermonson/go-proxmox v0.6.0
+	github.com/luthermonson/go-proxmox v0.7.0
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
 	proxmoxaas-common-lib v0.0.0
 )
 
 replace proxmoxaas-common-lib => ./proxmoxaas-common-lib
-replace github.com/luthermonson/go-proxmox v0.6.0 => ./go-proxmox
 
 require (
 	github.com/Azure/go-ntlmssp v0.1.1 // indirect
