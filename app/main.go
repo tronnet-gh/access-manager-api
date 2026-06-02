@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -27,7 +28,11 @@ var Config common.Config
 var UserSessions map[string]*UserSession
 var Realms map[string]Realm
 
-func Run(configPath *string, localDBPath *string) {
+func Run() {
+	configPath := flag.String("config", "config.json", "path to config.json file")
+	localDBPath := flag.String("localdb", "localdb.json", "path to localdb.json file")
+	flag.Parse()
+
 	// load config values
 	var err error
 	Config = common.GetConfig(*configPath)
