@@ -1,12 +1,12 @@
 module access-manager-api
 
-go 1.26.2
+go 1.26.4
 
 require (
 	github.com/gin-contrib/sessions v1.1.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ldap/ldap/v3 v3.4.13
-	github.com/luthermonson/go-proxmox v0.7.0
+	github.com/luthermonson/go-proxmox v0.7.1
 	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
 	proxmoxaas-common-lib v0.0.0
 )
