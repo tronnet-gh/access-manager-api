@@ -198,35 +198,43 @@ func DelUser(backends *UserSession, username common.Username) (int, error) {
 }
 
 func AddUserToGroup(backends *UserSession, username common.Username, groupname common.Groupname) (int, error) {
-	if username.Realm == "pve" && groupname.Realm == "pve" { // both requested user and requested group are in proxmox
+	if username.Realm == "pve" && groupname.Realm == "pve" { // both req user and req group are in proxmox
 		return backends.PVE.AddUserToGroup(username, groupname)
-	} else if username.Realm == backends.Realm.Name && groupname.Realm == "pve" { // requested user is in user's realm but group is in proxmox
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == "pve" { // requested user in realm and req group in proxmox
+		// this is a special case that is only supported because proxmox allows it
+		// if user@realm is added to a pve group, then sync realm DOES NOT clear the group from the user
+		// therefore adding user@realm to pve group should be allowed
+		// in the future support may be removed
 		return backends.PVE.AddUserToGroup(username, groupname)
-	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both requested user and requested group are in user's realm
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both req user and req group are in realm
 		realm_handler := backends.Realm.Handler.(common.Backend)
 		code, err := realm_handler.AddUserToGroup(username, groupname)
 		if err != nil {
 			return code, err
 		}
 		return backends.PVE.SyncRealms()
-	} else {
-		return http.StatusUnauthorized, fmt.Errorf("cannot add a pve user to a group in %s", groupname.Realm)
+	} else { // req user in proxmox and req group in realm (not possible to do)
+		return http.StatusUnauthorized, fmt.Errorf("cannot add %s to %s", username.ToString(), groupname.ToString())
 	}
 }
 
 func DelUserFromGroup(backends *UserSession, username common.Username, groupname common.Groupname) (int, error) {
-	if username.Realm == "pve" && groupname.Realm == "pve" { // both requested user and requested group are in proxmox
+	if username.Realm == "pve" && groupname.Realm == "pve" { /// both req user and req group are in proxmox
 		return backends.PVE.DelUserFromGroup(username, groupname)
-	} else if username.Realm == backends.Realm.Name && groupname.Realm == "pve" { // requested user is in user's realm but group is in proxmox
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == "pve" { // requested user in realm and req group in proxmox
+		// this is a special case that is only supported because proxmox allows it
+		// if user@realm was added to a pve group, then sync realm DOES NOT clear the group from the user
+		// therefore removing user@realm from pve group should be allowed
+		// in the future support may be removed
 		return backends.PVE.DelUserFromGroup(username, groupname)
-	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both requested user and requested group are in user's realm
+	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both req user and req group are in realm
 		realm_handler := backends.Realm.Handler.(common.Backend)
 		code, err := realm_handler.DelUserFromGroup(username, groupname)
 		if err != nil {
 			return code, err
 		}
 		return backends.PVE.SyncRealms()
-	} else {
-		return http.StatusUnauthorized, fmt.Errorf("cannot remove a pve user from a group in %s", groupname.Realm)
+	} else { // req user in proxmox and req group in realm (not possible to do)
+		return http.StatusUnauthorized, fmt.Errorf("cannot delete %s from %s", username.ToString(), groupname.ToString())
 	}
 }
