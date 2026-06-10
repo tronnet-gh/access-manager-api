@@ -87,8 +87,10 @@ func Run() {
 		}
 		userbackends.PVE = PVEClient
 
-		// bind ldap backend if backend is ldap
-		if handler == "ldap" {
+		// bind backend by type
+		switch handler {
+		case "pve":
+		case "ldap":
 			config := Realms[body.Username.Realm].Config.(common.LDAPConfig)
 			LDAPClient, code, err := ldap.NewClientFromCredentials(config, body.Username, body.Password)
 			if err != nil { // ldap client failed to bind
@@ -97,6 +99,9 @@ func Run() {
 			}
 			userbackends.Realm.Name = body.Username.Realm
 			userbackends.Realm.Handler = LDAPClient
+		default:
+			c.JSON(code, gin.H{"auth": false, "error": fmt.Errorf("user realm %s is not supported", body.Username.Realm)})
+			return
 		}
 
 		userbackends.DB = &db
@@ -580,7 +585,7 @@ func GetRealmsFromPVE(config *common.Config) map[string]Realm {
 	}
 	log.Printf("Configured default authentication realm pve")
 
-	// iterate through handlers and
+	// iterate through handlers and add to realms
 	for _, r := range pverealms {
 		realm, err := client.Domain(context.Background(), r.Realm)
 		if err != nil {
