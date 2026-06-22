@@ -23,7 +23,7 @@ import (
 	uuid "github.com/nu7hatch/gouuid"
 )
 
-var Version = "0.0.1"
+var Version = "1.0.0"
 var Config common.Config
 var UserSessions map[string]*UserSession
 var Realms map[string]Realm
