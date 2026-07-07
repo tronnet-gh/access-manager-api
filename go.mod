@@ -1,6 +1,6 @@
 module access-manager-api
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/gin-contrib/sessions v1.1.0
