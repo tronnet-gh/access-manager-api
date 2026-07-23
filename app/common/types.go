@@ -23,14 +23,6 @@ type Groupname = paas.Groupname
 type Group = paas.Group
 type Username = paas.Username
 type User = paas.User
-type VMID = paas.VMID
-type Backups = paas.Backups
-type Templates = paas.Templates
-type SimpleResource = paas.SimpleResource
-type SimpleLimit = paas.SimpleLimit
-type MatchResource = paas.MatchResource
-type MatchLimit = paas.MatchLimit
-type ResourceTemplate = paas.ResourceTemplate
 
 func ParseGroupname(groupname string) (Groupname, error) {
 	return paas.ParseGroupname(groupname)
