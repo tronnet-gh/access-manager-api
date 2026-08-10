@@ -149,7 +149,7 @@ func Run() {
 	router.GET("/pools/:poolid", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
 			return
 		}
 
@@ -170,7 +170,7 @@ func Run() {
 	router.POST("/pools/:poolid", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
 			return
 		}
 
@@ -191,7 +191,7 @@ func Run() {
 	router.DELETE("/pools/:poolid", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
 			return
 		}
 
@@ -212,7 +212,7 @@ func Run() {
 	router.GET("/groups/:groupname", func(c *gin.Context) {
 		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
 			return
 		}
 
@@ -238,7 +238,7 @@ func Run() {
 	router.POST("/groups/:groupname", func(c *gin.Context) {
 		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
@@ -265,7 +265,7 @@ func Run() {
 	router.DELETE("/groups/:groupname", func(c *gin.Context) {
 		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
@@ -292,13 +292,13 @@ func Run() {
 	router.POST("/pools/:poolid/groups/:groupname", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
 			return
 		}
 
 		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
@@ -325,13 +325,13 @@ func Run() {
 	router.DELETE("/pools/:poolid/groups/:groupname", func(c *gin.Context) {
 		poolid, ok := c.Params.Get("poolid")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
 			return
 		}
 
 		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
@@ -358,7 +358,7 @@ func Run() {
 	router.GET("/users/:username", func(c *gin.Context) {
 		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter poolid")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
 			return
 		}
 
@@ -384,7 +384,7 @@ func Run() {
 	router.POST("/users/:username", func(c *gin.Context) {
 		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
@@ -424,7 +424,7 @@ func Run() {
 	router.DELETE("/users/:username", func(c *gin.Context) {
 		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
@@ -451,13 +451,13 @@ func Run() {
 	router.POST("/groups/:groupname/users/:username", func(c *gin.Context) {
 		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
 		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter username")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter username")})
 			return
 		}
 
@@ -490,13 +490,13 @@ func Run() {
 	router.DELETE("/groups/:groupname/users/:username", func(c *gin.Context) {
 		groupname_str, ok := c.Params.Get("groupname")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter groupname")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
 			return
 		}
 
 		username_str, ok := c.Params.Get("username")
 		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("Missing required path parameter username")})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter username")})
 			return
 		}
 

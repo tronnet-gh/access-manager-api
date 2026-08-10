@@ -43,10 +43,9 @@ func SaveDB(localDBPath string, db DB) error {
 }
 
 func (localdb DB) GetPool(poolname string) (common.Pool, []string, int, error) {
-	pool := common.Pool{}
 	pool, ok := localdb.data[poolname]
 	if !ok {
-		return pool, []string{}, http.StatusNotFound, fmt.Errorf("Pool %s not in localdb", poolname)
+		return pool, []string{}, http.StatusNotFound, fmt.Errorf("pool %s not in localdb", poolname)
 	}
 	return pool, []string{}, http.StatusOK, nil
 }

@@ -29,7 +29,7 @@ func GetUserSessionFromContext(c *gin.Context) (*UserSession, int, error) {
 	session := sessions.Default(c)
 	SessionUUID := session.Get("SessionUUID")
 	if SessionUUID == nil {
-		return nil, http.StatusUnauthorized, fmt.Errorf("No auth session found")
+		return nil, http.StatusUnauthorized, fmt.Errorf("no auth session found")
 	}
 	uuid := SessionUUID.(string)
 	usersession := UserSessions[uuid]

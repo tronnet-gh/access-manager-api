@@ -153,9 +153,7 @@ func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []s
 
 	group.Groupname, _ = common.ParseGroupname(pvegroup.GroupID)
 
-	for _, userid := range pvegroup.Members {
-		members = append(members, userid)
-	}
+	members = append(members, pvegroup.Members...)
 
 	return group, members, http.StatusOK, nil
 }
@@ -306,7 +304,7 @@ func (pve ProxmoxClient) DelUserFromGroup(username common.Username, groupname co
 
 	idx := slices.Index(user.Groups, groupname.ToString())
 	if idx < 0 {
-		return http.StatusBadRequest, fmt.Errorf("Did not find group %s in user groups {%+v}.", groupname.ToString(), user.Groups)
+		return http.StatusBadRequest, fmt.Errorf("did not find group %s in user groups {%+v}", groupname.ToString(), user.Groups)
 	}
 	newGroups := slices.Delete(user.Groups, idx, idx)
 
