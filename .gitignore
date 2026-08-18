@@ -2,3 +2,4 @@ go.sum
 localdb.json
 dist/*
 **/config.json
+.vscode/*

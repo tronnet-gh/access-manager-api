@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	common "access-manager-api/app/common"
 
@@ -15,6 +16,14 @@ import (
 type ProxmoxClient struct {
 	config *common.PVEConfig
 	client *proxmox.Client
+}
+
+func IsProxmoxNotFound(err error) bool {
+	if err != nil {
+		// for whatever reason proxmox returns 500 for user/group/pool not found
+		return proxmox.IsNotFound(err) || strings.Contains(err.Error(), "no such user") || strings.Contains(err.Error(), "does not exist")
+	}
+	return false
 }
 
 // creates a new client binding with associated permissions
@@ -84,7 +93,7 @@ func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []string, int, e
 	members := []string{}
 
 	pvepool, err := pve.client.Pool(context.Background(), poolname)
-	if proxmox.IsNotFound(err) { // errors if pool does not exist
+	if IsProxmoxNotFound(err) { // errors if pool does not exist
 		return pool, members, http.StatusNotFound, err
 	} else if err != nil {
 		return pool, members, http.StatusInternalServerError, err
@@ -113,7 +122,7 @@ func (pve ProxmoxClient) DelPool(poolname string) (int, error) {
 	pvepool, err := pve.client.Pool(context.Background(), poolname)
 	if proxmox.IsNotAuthorized(err) { // not authorized to delete
 		return http.StatusUnauthorized, err
-	} else if proxmox.IsNotFound(err) { // errors if pool does not exist
+	} else if IsProxmoxNotFound(err) { // errors if pool does not exist
 		return http.StatusNotFound, err
 	} else if err != nil {
 		return http.StatusInternalServerError, err
@@ -145,7 +154,7 @@ func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []s
 	group := common.Group{}
 	members := []string{}
 	pvegroup, err := pve.client.Group(context.Background(), groupname.ToString())
-	if proxmox.IsNotFound(err) { // errors if pool does not exist
+	if IsProxmoxNotFound(err) { // errors if pool does not exist
 		return group, members, http.StatusNotFound, err
 	} else if err != nil {
 		return group, members, http.StatusInternalServerError, err
@@ -162,7 +171,7 @@ func (pve ProxmoxClient) DelGroup(groupname common.Groupname) (int, error) {
 	pvegroup, err := pve.client.Group(context.Background(), groupname.GroupID)
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err
-	} else if proxmox.IsNotFound(err) {
+	} else if IsProxmoxNotFound(err) {
 		return http.StatusNotFound, err
 	} else if err != nil {
 		return http.StatusInternalServerError, err
@@ -234,7 +243,7 @@ func (pve ProxmoxClient) NewUser(username common.Username, user common.User) (in
 func (pve ProxmoxClient) GetUser(username common.Username) (common.User, int, error) {
 	user := common.User{}
 	pveuser, err := pve.client.User(context.Background(), username.ToString())
-	if proxmox.IsNotFound(err) { // errors if pool does not exist
+	if IsProxmoxNotFound(err) { // errors if user does not exist
 		return user, http.StatusNotFound, err
 	} else if err != nil {
 		return user, http.StatusInternalServerError, err
@@ -251,7 +260,7 @@ func (pve ProxmoxClient) DelUser(username common.Username) (int, error) {
 	user, err := pve.client.User(context.Background(), username.ToString())
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err
-	} else if proxmox.IsNotFound(err) {
+	} else if IsProxmoxNotFound(err) {
 		return http.StatusNotFound, err
 	} else if err != nil {
 		return http.StatusInternalServerError, err
@@ -272,7 +281,7 @@ func (pve ProxmoxClient) AddUserToGroup(username common.Username, groupname comm
 	user, err := pve.client.User(context.Background(), username.ToString())
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err
-	} else if proxmox.IsNotFound(err) {
+	} else if IsProxmoxNotFound(err) {
 		return http.StatusNotFound, err
 	} else if err != nil {
 		return http.StatusInternalServerError, err
@@ -296,7 +305,7 @@ func (pve ProxmoxClient) DelUserFromGroup(username common.Username, groupname co
 	user, err := pve.client.User(context.Background(), username.ToString())
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err
-	} else if proxmox.IsNotFound(err) {
+	} else if IsProxmoxNotFound(err) {
 		return http.StatusNotFound, err
 	} else if err != nil {
 		return http.StatusInternalServerError, err
