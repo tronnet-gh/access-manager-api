@@ -3,15 +3,18 @@ package app
 import paas "proxmoxaas-common-lib"
 
 type Backend interface {
-	NewPool(poolname string) (int, error)
+	NewPool(poolname string, pool Pool) (int, error)
+	ModPool(poolname string, pool Pool) (int, error)
 	GetPool(poolname string) (Pool, []string, int, error) // []string members
 	DelPool(poolname string) (int, error)
-	NewGroup(groupname Groupname) (int, error)
+	NewGroup(groupname Groupname, group Group) (int, error)
+	ModGroup(groupname Groupname, group Group) (int, error)
 	GetGroup(groupname Groupname) (Group, []string, int, error) // []string members
 	DelGroup(groupname Groupname) (int, error)
 	AddGroupToPool(groupname Groupname, poolname string) (int, error)
 	DelGroupFromPool(groupname Groupname, poolname string) (int, error)
 	NewUser(username Username, user User) (int, error)
+	ModUser(username Username, user User) (int, error)
 	GetUser(username Username) (User, int, error)
 	DelUser(username Username) (int, error)
 	AddUserToGroup(username Username, groupname Groupname) (int, error)

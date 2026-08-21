@@ -21,13 +21,13 @@ type ProxmoxClient struct {
 func IsProxmoxNotFound(err error) bool {
 	if err != nil {
 		// for whatever reason proxmox returns 500 for user/group/pool not found
-		return proxmox.IsNotFound(err) || strings.Contains(err.Error(), "no such user") || strings.Contains(err.Error(), "does not exist")
+		return proxmox.IsNotFound(err) || strings.Contains(err.Error(), "no such") || strings.Contains(err.Error(), "does not exist")
 	}
 	return false
 }
 
 // creates a new client binding with associated permissions
-func NewClientFromCredentials(config common.PVEConfig, username common.Username, password string) (*ProxmoxClient, int, error) {
+func NewClientFromCredentials(config common.PVEConfig, username common.Username, password string) (common.Backend, int, error) {
 	HTTPClient := http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{},
@@ -47,7 +47,7 @@ func NewClientFromCredentials(config common.PVEConfig, username common.Username,
 		return nil, http.StatusUnauthorized, err
 	}
 
-	return &ProxmoxClient{config: &config, client: client}, http.StatusOK, nil
+	return ProxmoxClient{config: &config, client: client}, http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) SyncRealms() (int, error) {
@@ -60,7 +60,7 @@ func (pve ProxmoxClient) SyncRealms() (int, error) {
 	for _, domain := range domains {
 		if domain.Type != "pam" && domain.Type != "pve" { // pam and pve are not external realm types that require sync
 			e := proxmox.IntOrBool(true)
-			r := string("acl;entry;properties")
+			r := "acl;entry;properties"
 			err := domain.Sync(context.Background(), proxmox.DomainSyncOptions{
 				DryRun:         false,  // we want to make modifications
 				EnableNew:      &e,     // allow new users and groups
@@ -77,7 +77,7 @@ func (pve ProxmoxClient) SyncRealms() (int, error) {
 	return http.StatusOK, nil
 }
 
-func (pve ProxmoxClient) NewPool(poolname string) (int, error) {
+func (pve ProxmoxClient) NewPool(poolname string, pool common.Pool) (int, error) {
 	err := pve.client.NewPool(context.Background(), poolname, "")
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err
@@ -86,6 +86,11 @@ func (pve ProxmoxClient) NewPool(poolname string) (int, error) {
 	} else {
 		return http.StatusOK, nil
 	}
+}
+
+func (pve ProxmoxClient) ModPool(poolname string, pool common.Pool) (int, error) {
+	// no-op
+	return http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []string, int, error) {
@@ -138,8 +143,8 @@ func (pve ProxmoxClient) DelPool(poolname string) (int, error) {
 	}
 }
 
-func (pve ProxmoxClient) NewGroup(groupname common.Groupname) (int, error) {
-	// add new group ny ID only
+func (pve ProxmoxClient) NewGroup(groupname common.Groupname, group common.Group) (int, error) {
+	// add new group by ID only
 	err := pve.client.NewGroup(context.Background(), groupname.GroupID, "")
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err
@@ -148,6 +153,11 @@ func (pve ProxmoxClient) NewGroup(groupname common.Groupname) (int, error) {
 	} else {
 		return http.StatusOK, nil
 	}
+}
+
+func (pve ProxmoxClient) ModGroup(groupname common.Groupname, group common.Group) (int, error) {
+	// no-op
+	return http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []string, int, error) {
@@ -224,12 +234,45 @@ func (pve ProxmoxClient) DelGroupFromPool(groupname common.Groupname, poolname s
 }
 
 func (pve ProxmoxClient) NewUser(username common.Username, user common.User) (int, error) {
+	if !common.RequireAll(user, "Username") {
+		return http.StatusBadRequest, fmt.Errorf("missing one of required fields: cn, sn, mail, userpassword")
+	}
+
 	err := pve.client.NewUser(context.Background(), &proxmox.NewUser{
 		UserID:    username.ToString(),
 		Firstname: user.CN,
 		Lastname:  user.SN,
 		Email:     user.Mail,
 		Password:  user.Password,
+	})
+	if proxmox.IsNotAuthorized(err) {
+		return http.StatusUnauthorized, err
+	} else if err != nil {
+		return http.StatusInternalServerError, err
+	} else {
+		return http.StatusOK, nil
+	}
+}
+
+func (pve ProxmoxClient) ModUser(username common.Username, user common.User) (int, error) {
+	if !common.AtLeastOne(user, "Username") {
+		return http.StatusBadRequest, fmt.Errorf("requires one of fields: cn, sn, mail, userpassword")
+	}
+
+	pveuser, err := pve.client.User(context.Background(), username.ToString())
+	if proxmox.IsNotAuthorized(err) {
+		return http.StatusUnauthorized, err
+	} else if IsProxmoxNotFound(err) {
+		return http.StatusNotFound, err
+	} else if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	err = pveuser.Update(context.Background(), proxmox.UserOptions{
+		Firstname: user.CN,
+		Lastname:  user.SN,
+		Email:     user.Mail,
+		// todo userpassword (its a separate pve endpoint)
 	})
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err

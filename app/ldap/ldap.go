@@ -78,8 +78,10 @@ func (l LDAPClient) GetUser(username common.Username) (common.User, int, error) 
 	)
 
 	searchResponse, err := l.client.Search(searchRequest) // perform search
-	if err != nil {
-		return user, http.StatusBadRequest, err
+	if ldap.IsErrorAnyOf(err, ldap.LDAPResultNoSuchObject) {
+		return user, http.StatusNotFound, err
+	} else if err != nil {
+		return user, http.StatusInternalServerError, err
 	}
 
 	entry := searchResponse.Entries[0]
@@ -91,10 +93,10 @@ func (l LDAPClient) GetUser(username common.Username) (common.User, int, error) 
 }
 
 func (l LDAPClient) NewUser(username common.Username, user common.User) (int, error) {
-	if user.CN == "" || user.SN == "" || user.Password == "" || user.Mail == "" {
+	if !common.RequireAll(user, "Username") {
 		return http.StatusBadRequest, ldap.NewError(
 			ldap.LDAPResultUnwillingToPerform,
-			errors.New("missing one of required fields: cn, sn, mail, userpassword"),
+			errors.New("requires all of fields: cn, sn, mail, password"),
 		)
 	}
 
@@ -117,10 +119,10 @@ func (l LDAPClient) NewUser(username common.Username, user common.User) (int, er
 }
 
 func (l LDAPClient) ModUser(username common.Username, user common.User) (int, error) {
-	if user.CN == "" && user.SN == "" && user.Password == "" && user.Mail == "" {
+	if !common.AtLeastOne(user, "Username") {
 		return http.StatusBadRequest, ldap.NewError(
 			ldap.LDAPResultUnwillingToPerform,
-			errors.New("requires one of fields: cn, sn, mail, userpassword"),
+			errors.New("requires one of fields: cn, sn, mail, password"),
 		)
 	}
 
@@ -180,8 +182,10 @@ func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, []string
 	)
 
 	searchResponse, err := l.client.Search(searchRequest) // perform search
-	if err != nil {
-		return group, members, http.StatusBadRequest, err
+	if ldap.IsErrorAnyOf(err, ldap.LDAPResultNoSuchObject) {
+		return group, members, http.StatusNotFound, err
+	} else if err != nil {
+		return group, members, http.StatusInternalServerError, err
 	}
 
 	entry := searchResponse.Entries[0]
@@ -195,7 +199,7 @@ func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, []string
 	return group, members, http.StatusOK, nil
 }
 
-func (l LDAPClient) NewGroup(groupname common.Groupname) (int, error) {
+func (l LDAPClient) NewGroup(groupname common.Groupname, group common.Group) (int, error) {
 	// add new group by ID only
 	addRequest := ldap.NewAddRequest(
 		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN), // DN
@@ -214,19 +218,7 @@ func (l LDAPClient) NewGroup(groupname common.Groupname) (int, error) {
 }
 
 func (l LDAPClient) ModGroup(groupname common.Groupname, group common.Group) (int, error) {
-	modifyRequest := ldap.NewModifyRequest(
-		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN),
-		nil,
-	)
-
-	modifyRequest.Replace("cn", []string{groupname.GroupID})
-
-	err := l.client.Modify(modifyRequest)
-	if err != nil {
-		return http.StatusBadRequest, err
-	}
-
-	return http.StatusOK, nil
+	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement modification of groups")
 }
 
 func (l LDAPClient) DelGroup(groupname common.Groupname) (int, error) {
@@ -285,7 +277,11 @@ func (l LDAPClient) DelUserFromGroup(username common.Username, groupname common.
 	return http.StatusOK, nil
 }
 
-func (l LDAPClient) NewPool(poolname string) (int, error) {
+func (l LDAPClient) NewPool(poolname string, pool common.Pool) (int, error) {
+	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
+}
+
+func (l LDAPClient) ModPool(poolname string, pool common.Pool) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }
 

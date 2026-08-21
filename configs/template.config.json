@@ -16,5 +16,8 @@
             "uuid": "<secret-uuid>"
         },
         "paas-client-role": "<PAAS Client Role>"
+    },
+    "localdb": {
+        "path": "localdb.json"
     }
 }

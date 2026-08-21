@@ -3,13 +3,46 @@ package app
 import (
 	common "access-manager-api/app/common"
 	"access-manager-api/app/ldap"
+	proxmox "access-manager-api/app/pve"
 	"fmt"
 	"net/http"
 )
 
-func NewPool(backends *UserSession, poolname string) (int, error) {
-	// only pve backend handles pools
-	return backends.PVE.NewPool(poolname)
+func NewPool(backends *UserSession, poolname string, pool common.Pool) (int, error) {
+	code, err := backends.PVE.NewPool(poolname, pool)
+	if err != nil {
+		return code, err
+	}
+
+	code, err = backends.DB.NewPool(poolname, pool)
+	if err != nil {
+		// try to undo pve add pool operation
+		backends.PVE.DelPool(poolname)
+		return code, err
+	}
+
+	return http.StatusOK, nil
+}
+
+func ModPool(backends *UserSession, poolname string, pool common.Pool) (int, error) {
+	oldpool, code, err := GetPool(backends, poolname)
+	if err != nil {
+		return code, err
+	}
+
+	code, err = backends.PVE.ModPool(poolname, pool)
+	if err != nil {
+		return code, err
+	}
+
+	code, err = backends.DB.ModPool(poolname, pool)
+	if err != nil {
+		// try to undo pve mod pool operation
+		backends.PVE.ModPool(poolname, oldpool)
+		return code, err
+	}
+
+	return http.StatusOK, nil
 }
 
 // get pool recursive resolving groups
@@ -25,7 +58,8 @@ func GetPool(backends *UserSession, poolname string) (common.Pool, int, error) {
 	if err != nil {
 		return pool, code, err
 	}
-	// assign pool id from PVE, assign everything else from DB
+
+	// assign pool id and pool members from PVE, assign everything else from DB
 	pool.PoolID = pvepool.PoolID
 	pool.Resources = dbpool.Resources
 	pool.AllowedNodes = dbpool.AllowedNodes
@@ -43,6 +77,7 @@ func GetPool(backends *UserSession, poolname string) (common.Pool, int, error) {
 		if err != nil {
 			return pool, code, err
 		}
+		// members already are filtered by PAASClientRole
 		group.Role = Config.PVE.PAASClientRole
 		pool.Groups = append(pool.Groups, group)
 	}
@@ -50,20 +85,42 @@ func GetPool(backends *UserSession, poolname string) (common.Pool, int, error) {
 	return pool, http.StatusOK, nil
 }
 func DelPool(backends *UserSession, poolname string) (int, error) {
-	// only pve backend handles pools
-	return backends.PVE.DelPool(poolname)
+	codepve, errpve := backends.PVE.DelPool(poolname)
+
+	codedb, errdb := backends.DB.DelPool(poolname)
+
+	if errpve != nil || errdb != nil {
+		return http.StatusInternalServerError, fmt.Errorf("error deleting pool: (pve:%d, %s) (db:%d, %s)", codepve, errpve, codedb, errdb)
+	} else {
+		return http.StatusOK, nil
+	}
 }
 
-func NewGroup(backends *UserSession, groupname common.Groupname) (int, error) {
+func NewGroup(backends *UserSession, groupname common.Groupname, group common.Group) (int, error) {
 	if groupname.Realm == "pve" {
-		return backends.PVE.NewGroup(groupname)
+		return backends.PVE.NewGroup(groupname, group)
 	} else if groupname.Realm == backends.Realm.Name {
-		realm_handler := backends.Realm.Handler.(common.Backend)
-		code, err := realm_handler.NewGroup(groupname)
+		realm_handler := backends.Realm.Handler
+		code, err := realm_handler.NewGroup(groupname, group)
 		if err != nil {
 			return code, err
 		}
-		return backends.PVE.SyncRealms()
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
+	}
+}
+
+func ModGroup(backends *UserSession, groupname common.Groupname, group common.Group) (int, error) {
+	if groupname.Realm == "pve" {
+		return backends.PVE.ModGroup(groupname, group)
+	} else if groupname.Realm == backends.Realm.Name {
+		realm_handler := backends.Realm.Handler
+		code, err := realm_handler.ModGroup(groupname, group)
+		if err != nil {
+			return code, err
+		}
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
 	}
@@ -92,7 +149,7 @@ func GetGroup(backends *UserSession, groupname common.Groupname) (common.Group, 
 
 		return group, http.StatusOK, nil
 	} else if groupname.Realm == backends.Realm.Name {
-		group, members, code, err := backends.Realm.Handler.(common.Backend).GetGroup(groupname)
+		group, members, code, err := backends.Realm.Handler.GetGroup(groupname)
 		if err != nil {
 			return common.Group{}, code, err
 		}
@@ -127,12 +184,12 @@ func DelGroup(backends *UserSession, groupname common.Groupname) (int, error) {
 	if groupname.Realm == "pve" {
 		return backends.PVE.DelGroup(groupname)
 	} else if groupname.Realm == backends.Realm.Name {
-		realm_handler := backends.Realm.Handler.(common.Backend)
+		realm_handler := backends.Realm.Handler
 		code, err := realm_handler.DelGroup(groupname)
 		if err != nil {
 			return code, err
 		}
-		return backends.PVE.SyncRealms()
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
 	}
@@ -152,12 +209,29 @@ func NewUser(backends *UserSession, username common.Username, user common.User) 
 	if username.Realm == "pve" {
 		return backends.PVE.NewUser(username, user)
 	} else if username.Realm == backends.Realm.Name {
-		realm_handler := backends.Realm.Handler.(common.Backend)
+		realm_handler := backends.Realm.Handler
 		code, err := realm_handler.NewUser(username, user)
 		if err != nil {
 			return code, err
 		}
-		return backends.PVE.SyncRealms()
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
+	} else {
+		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
+	}
+}
+
+func ModUser(backends *UserSession, username common.Username, user common.User) (int, error) {
+	if username.Realm == "pve" {
+		return backends.PVE.ModUser(username, user)
+	} else if username.Realm == backends.Realm.Name {
+		realm_handler := backends.Realm.Handler
+		code, err := realm_handler.ModUser(username, user)
+		if err != nil {
+			return code, err
+		}
+		// todo, most users will not have access to sync realms, but should be able to modify their own user
+		// will probably use priviledge escalation to give priviledge for modify user operations
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
@@ -172,7 +246,7 @@ func GetUser(backends *UserSession, username common.Username) (common.User, int,
 		}
 		return pveuser, http.StatusOK, nil
 	} else if username.Realm == backends.Realm.Name {
-		realmuser, code, err := backends.Realm.Handler.(common.Backend).GetUser(username)
+		realmuser, code, err := backends.Realm.Handler.GetUser(username)
 		if err != nil {
 			return common.User{}, code, err
 		}
@@ -186,12 +260,12 @@ func DelUser(backends *UserSession, username common.Username) (int, error) {
 	if username.Realm == "pve" {
 		return backends.PVE.DelUser(username)
 	} else if username.Realm == backends.Realm.Name {
-		realm_handler := backends.Realm.Handler.(common.Backend)
+		realm_handler := backends.Realm.Handler
 		code, err := realm_handler.DelUser(username)
 		if err != nil {
 			return code, err
 		}
-		return backends.PVE.SyncRealms()
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
@@ -207,12 +281,12 @@ func AddUserToGroup(backends *UserSession, username common.Username, groupname c
 		// in the future support may be removed
 		return backends.PVE.AddUserToGroup(username, groupname)
 	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both req user and req group are in realm
-		realm_handler := backends.Realm.Handler.(common.Backend)
+		realm_handler := backends.Realm.Handler
 		code, err := realm_handler.AddUserToGroup(username, groupname)
 		if err != nil {
 			return code, err
 		}
-		return backends.PVE.SyncRealms()
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
 	} else { // req user in proxmox and req group in realm (not possible to do)
 		return http.StatusUnauthorized, fmt.Errorf("cannot add %s to %s", username.ToString(), groupname.ToString())
 	}
@@ -228,12 +302,12 @@ func DelUserFromGroup(backends *UserSession, username common.Username, groupname
 		// in the future support may be removed
 		return backends.PVE.DelUserFromGroup(username, groupname)
 	} else if username.Realm == backends.Realm.Name && groupname.Realm == backends.Realm.Name { // both req user and req group are in realm
-		realm_handler := backends.Realm.Handler.(common.Backend)
+		realm_handler := backends.Realm.Handler
 		code, err := realm_handler.DelUserFromGroup(username, groupname)
 		if err != nil {
 			return code, err
 		}
-		return backends.PVE.SyncRealms()
+		return backends.PVE.(proxmox.ProxmoxClient).SyncRealms()
 	} else { // req user in proxmox and req group in realm (not possible to do)
 		return http.StatusUnauthorized, fmt.Errorf("cannot delete %s from %s", username.ToString(), groupname.ToString())
 	}

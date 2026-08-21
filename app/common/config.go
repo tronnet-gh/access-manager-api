@@ -25,6 +25,10 @@ type LDAPConfig struct {
 	Verify   bool
 }
 
+type LocalDBConfig struct {
+	Path string `json:"path"`
+}
+
 type Config struct {
 	ListenPort        int    `json:"listenPort"`
 	SessionCookieName string `json:"sessionCookieName"`
@@ -34,7 +38,8 @@ type Config struct {
 		Secure   bool   `json:"secure"`
 		MaxAge   int    `json:"maxAge"`
 	}
-	PVE PVEConfig `json:"pve"`
+	PVE     PVEConfig     `json:"pve"`
+	LocalDB LocalDBConfig `json:"localdb"`
 }
 
 func GetConfig(configPath string) Config {
