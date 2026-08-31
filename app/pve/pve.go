@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"slices"
-	"strings"
 
 	common "access-manager-api/app/common"
 
@@ -17,14 +16,6 @@ import (
 type ProxmoxClient struct {
 	config *common.PVEConfig
 	client *proxmox.Client
-}
-
-func IsProxmoxNotFound(err error) bool {
-	if err != nil {
-		// for whatever reason proxmox returns 500 for user/group/pool not found
-		return proxmox.IsNotFound(err) || strings.Contains(err.Error(), "no such") || strings.Contains(err.Error(), "does not exist")
-	}
-	return false
 }
 
 // creates a new client binding with associated permissions
@@ -52,16 +43,15 @@ func NewClientFromCredentials(config common.PVEConfig, username common.Username,
 }
 
 // creates a new client binding with associated permissions
-func NewClientFromAPIToken(config common.PVEConfig) (common.Backend, int, error) {
+func NewClientFromAPIToken(config common.PVEConfig, token common.PVEAPIToken) (common.Backend, int, error) {
 	HTTPClient := http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{},
 		},
 	}
-	token := fmt.Sprintf(`%s@%s!%s`, config.Token.User, config.Token.Realm, config.Token.ID)
 	client := proxmox.NewClient(config.URL,
 		proxmox.WithHTTPClient(&HTTPClient),
-		proxmox.WithAPIToken(token, config.Token.UUID),
+		proxmox.WithAPIToken(token.ToString(), config.Token.UUID),
 	)
 
 	// check that the user is authenticated because proxmox.NewClient does not return an error

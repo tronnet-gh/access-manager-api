@@ -48,7 +48,7 @@ func Run() {
 	SetupAPISessionStore(router, &Config)
 
 	// setup root api token
-	client, code, err := pve.NewClientFromAPIToken(Config.PVE)
+	client, code, err := pve.NewClientFromAPIToken(Config.PVE, Config.PVE.Token)
 	if err != nil {
 		log.Fatalf("error initializing pve root client: %d %s", code, err)
 	}

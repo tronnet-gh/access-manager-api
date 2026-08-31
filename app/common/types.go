@@ -32,10 +32,9 @@ type Group = paas.Group
 type Username = paas.Username
 type User = paas.User
 
-func ParseGroupname(groupname string) (Groupname, error) {
-	return paas.ParseGroupname(groupname)
-}
-
-func ParseUsername(username string) (Username, error) {
-	return paas.ParseUsername(username)
+type PVEAPIToken struct {
+	User  string `json:"user"`
+	Realm string `json:"realm"`
+	ID    string `json:"id"`
+	UUID  string `json:"uuid"`
 }

@@ -2,10 +2,8 @@ package localdb
 
 import (
 	common "access-manager-api/app/common"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 )
 
 type DB struct {
@@ -14,39 +12,6 @@ type DB struct {
 }
 
 var db *DB
-
-func (db *DB) load(localDBPath string) error {
-	db.data = make(map[string]common.Pool)
-	db.path = localDBPath
-
-	root, err := os.OpenRoot(".")
-	if err != nil {
-		return err
-	}
-	defer root.Close()
-
-	content, err := root.ReadFile(localDBPath)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(content, &db.data)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (db *DB) save() error {
-	localDBPath := db.path
-	// write to file with pretty print for readability reasons
-	json, err := json.MarshalIndent(db.data, "", "\t")
-	if err != nil {
-		return err
-	}
-	err = os.WriteFile(localDBPath, []byte(json), 0600)
-	return err
-}
 
 func NewClientFromCredentials(config common.LocalDBConfig, username common.Username, password string) (common.Backend, int, error) {
 	if db != nil {

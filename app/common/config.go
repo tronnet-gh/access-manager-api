@@ -7,14 +7,9 @@ import (
 )
 
 type PVEConfig struct {
-	URL   string `json:"url"`
-	Token struct {
-		User  string `json:"user"`
-		Realm string `json:"realm"`
-		ID    string `json:"id"`
-		UUID  string `json:"uuid"`
-	} `json:"token"`
-	PAASClientRole string `json:"paas-client-role"`
+	URL            string      `json:"url"`
+	Token          PVEAPIToken `json:"token"`
+	PAASClientRole string      `json:"paas-client-role"`
 }
 
 type LDAPConfig struct {

@@ -1,8 +1,19 @@
 package app
 
 import (
+	"fmt"
 	"reflect"
+
+	paas "proxmoxaas-common-lib"
 )
+
+func ParseGroupname(groupname string) (Groupname, error) {
+	return paas.ParseGroupname(groupname)
+}
+
+func ParseUsername(username string) (Username, error) {
+	return paas.ParseUsername(username)
+}
 
 // RequireAll ensures that EVERY non-excluded exported field in the struct is non-zero.
 func RequireAll(v any, excludes ...string) bool {
@@ -52,4 +63,8 @@ func AtLeastOne(v any, excludes ...string) bool {
 		}
 	}
 	return false
+}
+
+func (token PVEAPIToken) ToString() string {
+	return fmt.Sprintf(`%s@%s!%s`, token.User, token.Realm, token.ID)
 }
