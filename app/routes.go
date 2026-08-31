@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"net/http"
 	paas "proxmoxaas-common-lib"
+	"uuid"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
-	uuid "github.com/nu7hatch/gouuid"
 )
 
 func POST_Ticket(c *gin.Context) {
@@ -68,7 +68,7 @@ func POST_Ticket(c *gin.Context) {
 	// create new session
 	session := sessions.Default(c)
 	// create random uuid to map user to backends
-	uuid, _ := uuid.NewV4()
+	uuid := uuid.NewV4()
 	// set uuid mapping in session
 	session.Set("SessionUUID", uuid.String())
 	// set uuid mapping in LDAPSessions

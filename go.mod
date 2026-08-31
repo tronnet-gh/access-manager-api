@@ -7,7 +7,6 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ldap/ldap/v3 v3.4.14
 	github.com/luthermonson/go-proxmox v0.8.1
-	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d
 	proxmoxaas-common-lib v0.0.0
 )
 
