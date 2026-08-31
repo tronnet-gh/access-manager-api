@@ -2,6 +2,11 @@ package app
 
 import paas "proxmoxaas-common-lib"
 
+type Realm struct {
+	Type   string
+	Config any
+}
+
 type Backend interface {
 	NewPool(poolname string, pool Pool) (int, error)
 	ModPool(poolname string, pool Pool) (int, error)

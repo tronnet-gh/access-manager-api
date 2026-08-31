@@ -1,9 +1,7 @@
 package app
 
 import (
-	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
@@ -11,17 +9,12 @@ import (
 	"strconv"
 
 	common "access-manager-api/app/common"
+	"access-manager-api/app/pve"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
-	"github.com/luthermonson/go-proxmox"
 )
-
-type Realm struct {
-	Type   string
-	Config any
-}
 
 type UserSession struct {
 	PVE   common.Backend
@@ -34,8 +27,9 @@ type UserSession struct {
 
 var Version = "1.0.0"
 var Config common.Config
+var RootSession *UserSession
 var UserSessions map[string]*UserSession
-var Realms map[string]Realm
+var Realms map[string]common.Realm
 
 func Run() {
 	configPath := flag.String("config", "config.json", "path to config.json file")
@@ -53,9 +47,18 @@ func Run() {
 	// setup api auth cookies
 	SetupAPISessionStore(router, &Config)
 
+	// setup root api token
+	client, code, err := pve.NewClientFromAPIToken(Config.PVE)
+	if err != nil {
+		log.Fatalf("error initializing pve root client: %d %s", code, err)
+	}
+	RootSession = &UserSession{
+		PVE: client,
+	}
+
 	// get realms from proxmox
-	Realms = make(map[string]Realm)
-	Realms = GetRealmsFromPVE(&Config)
+	Realms = make(map[string]common.Realm)
+	Realms = RootSession.PVE.(pve.ProxmoxClient).GetRealms()
 
 	// make global session map
 	UserSessions = make(map[string]*UserSession)
@@ -82,7 +85,7 @@ func Run() {
 
 	log.Printf("Starting Access Manager API on port %s\n", strconv.Itoa(Config.ListenPort))
 
-	err := router.Run("0.0.0.0:" + strconv.Itoa(Config.ListenPort))
+	err = router.Run("0.0.0.0:" + strconv.Itoa(Config.ListenPort))
 	if err != nil {
 		log.Fatalf("Error starting router: %s", err.Error())
 	}
@@ -117,63 +120,4 @@ func GetUserSessionFromContext(c *gin.Context) (*UserSession, int, error) {
 	uuid := SessionUUID.(string)
 	usersession := UserSessions[uuid]
 	return usersession, http.StatusOK, nil
-}
-
-func GetRealmsFromPVE(config *common.Config) map[string]Realm {
-	realms := map[string]Realm{}
-
-	HTTPClient := http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{},
-		},
-	}
-	token := fmt.Sprintf(`%s@%s!%s`, config.PVE.Token.User, config.PVE.Token.Realm, config.PVE.Token.ID)
-	client := proxmox.NewClient(config.PVE.URL,
-		proxmox.WithHTTPClient(&HTTPClient),
-		proxmox.WithAPIToken(token, config.PVE.Token.UUID),
-	)
-
-	pverealms, err := client.Domains(context.Background())
-	if err != nil {
-		// failure to get realms is a fatal error
-		log.Fatalf("Error getting authentication realms: %s", err.Error())
-	}
-
-	// add required pve realm handler, removing the pve api token
-	pveconfig := common.PVEConfig{
-		URL:            config.PVE.URL,
-		PAASClientRole: config.PVE.PAASClientRole,
-	}
-	realms["pve"] = Realm{
-		Type:   "pve",
-		Config: pveconfig,
-	}
-	log.Printf("Configured default authentication realm pve")
-
-	// iterate through handlers and add to realms
-	for _, r := range pverealms {
-		realm, err := client.Domain(context.Background(), r.Realm)
-		if err != nil {
-			log.Printf("Error getting authentication realm %s: %s", r.Realm, err.Error())
-		}
-
-		if realm.Type == "ldap" {
-			ldapconfig := common.LDAPConfig{
-				BaseDN:   realm.BaseDN,
-				Hostname: realm.Server1,
-				TLS:      realm.Mode == "ldaps",
-				StartTLS: realm.Mode == "ldap+starttls",
-				Verify:   bool(realm.Verify),
-			}
-			realms[realm.Realm] = Realm{
-				Type:   realm.Type,
-				Config: ldapconfig,
-			}
-			log.Printf("Configured external authentication realm %s", realm.Realm)
-		} else {
-			continue
-		}
-	}
-
-	return realms
 }

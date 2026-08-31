@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -50,6 +51,29 @@ func NewClientFromCredentials(config common.PVEConfig, username common.Username,
 	return ProxmoxClient{config: &config, client: client}, http.StatusOK, nil
 }
 
+// creates a new client binding with associated permissions
+func NewClientFromAPIToken(config common.PVEConfig) (common.Backend, int, error) {
+	HTTPClient := http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{},
+		},
+	}
+	token := fmt.Sprintf(`%s@%s!%s`, config.Token.User, config.Token.Realm, config.Token.ID)
+	client := proxmox.NewClient(config.URL,
+		proxmox.WithHTTPClient(&HTTPClient),
+		proxmox.WithAPIToken(token, config.Token.UUID),
+	)
+
+	// check that the user is authenticated because proxmox.NewClient does not return an error
+	// version route is accessible to any authenticated user
+	_, err := client.Version(context.Background())
+	if err != nil { // could not get version so therefore the user is not authenticated
+		return nil, http.StatusUnauthorized, err
+	}
+
+	return ProxmoxClient{config: &config, client: client}, http.StatusOK, nil
+}
+
 func (pve ProxmoxClient) SyncRealms() (int, error) {
 	domains, err := pve.client.Domains(context.Background())
 	if proxmox.IsNotAuthorized(err) {
@@ -75,6 +99,54 @@ func (pve ProxmoxClient) SyncRealms() (int, error) {
 		}
 	}
 	return http.StatusOK, nil
+}
+
+func (pve ProxmoxClient) GetRealms() map[string]common.Realm {
+	realms := map[string]common.Realm{}
+
+	pverealms, err := pve.client.Domains(context.Background())
+	if err != nil {
+		// failure to get realms is a fatal error
+		log.Fatalf("Error getting authentication realms: %s", err.Error())
+	}
+
+	// add required pve realm handler, removing the pve api token
+	pveconfig := common.PVEConfig{
+		URL:            pve.config.URL,
+		PAASClientRole: pve.config.PAASClientRole,
+	}
+	realms["pve"] = common.Realm{
+		Type:   "pve",
+		Config: pveconfig,
+	}
+	log.Printf("Configured default authentication realm pve")
+
+	// iterate through handlers and add to realms
+	for _, r := range pverealms {
+		realm, err := pve.client.Domain(context.Background(), r.Realm)
+		if err != nil {
+			log.Printf("Error getting authentication realm %s: %s", r.Realm, err.Error())
+		}
+
+		if realm.Type == "ldap" {
+			ldapconfig := common.LDAPConfig{
+				BaseDN:   realm.BaseDN,
+				Hostname: realm.Server1,
+				TLS:      realm.Mode == "ldaps",
+				StartTLS: realm.Mode == "ldap+starttls",
+				Verify:   bool(realm.Verify),
+			}
+			realms[realm.Realm] = common.Realm{
+				Type:   realm.Type,
+				Config: ldapconfig,
+			}
+			log.Printf("Configured external authentication realm %s", realm.Realm)
+		} else {
+			continue
+		}
+	}
+
+	return realms
 }
 
 func (pve ProxmoxClient) NewPool(poolname string, pool common.Pool) (int, error) {
