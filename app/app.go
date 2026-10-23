@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	paas "proxmoxaas-common-lib"
+
 	"github.com/luthermonson/go-proxmox"
 )
 
@@ -60,10 +62,9 @@ func Run() {
 	router.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		PVEVersion, err := client.Version()
 		if err != nil {
-
-			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		} else {
-			WriteJson(w, http.StatusOK, map[string]any{"api-version": APIVersion, "pve-version": PVEVersion})
+			paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"api-version": APIVersion, "pve-version": PVEVersion})
 		}
 	})
 
@@ -71,9 +72,9 @@ func Run() {
 		callback := Callback{}
 		v, err := GetCluster(&callback, &cluster)
 		if err != nil {
-			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		} else {
-			WriteJson(w, http.StatusOK, map[string]any{"cluster": v})
+			paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"cluster": v})
 		}
 		callback.Invoke()
 	})
@@ -83,9 +84,9 @@ func Run() {
 		callback := Callback{}
 		node, err := GetNode(&callback, &cluster, nodeid)
 		if err != nil {
-			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		} else {
-			WriteJson(w, http.StatusOK, map[string]any{"node": node})
+			paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"node": node})
 		}
 		callback.Invoke()
 	})
@@ -94,15 +95,15 @@ func Run() {
 		nodeid := r.PathValue("node")
 		vmid, err := strconv.ParseUint(r.PathValue("vmid"), 10, 64)
 		if err != nil {
-			WriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", r.PathValue("instance"))})
+			paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", r.PathValue("instance"))})
 			return
 		}
 		callback := Callback{}
 		instance, err := GetInstance(&callback, &cluster, nodeid, vmid)
 		if err != nil {
-			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		} else {
-			WriteJson(w, http.StatusOK, map[string]any{"instance": instance})
+			paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"instance": instance})
 		}
 		callback.Invoke()
 	})
@@ -112,7 +113,7 @@ func Run() {
 		err := cluster.Sync()
 		if err != nil {
 			log.Printf("[ERR ] failed to sync cluster: %s", err)
-			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		} else {
 			return
@@ -128,7 +129,7 @@ func Run() {
 		node, err := GetNode(&callback, &cluster, nodeName)
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s: %s", nodeName, err.Error())
-			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 			callback.Invoke()
 			return
 		}
@@ -137,7 +138,7 @@ func Run() {
 		err = node.Sync()
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s: %s", nodeName, err.Error())
-			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		}
 	})
 
@@ -146,7 +147,7 @@ func Run() {
 		vmid, err := strconv.ParseUint(r.PathValue("vmid"), 10, 64)
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s.%d: %s", nodeName, vmid, err.Error())
-			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", r.PathValue("instance"))})
+			paas.HTTPWriteJson(w, http.StatusInternalServerError, map[string]any{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", r.PathValue("instance"))})
 			return
 		}
 
@@ -156,7 +157,7 @@ func Run() {
 		instance, err := GetInstance(&callback, &cluster, nodeName, vmid)
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s.%d: %s", nodeName, vmid, err.Error())
-			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 			callback.Invoke()
 			return
 		}
@@ -165,14 +166,14 @@ func Run() {
 		err = instance.Sync()
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s.%d: %s", nodeName, vmid, err.Error())
-			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
+			paas.HTTPWriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		}
 	})
 
 	server := LoggingMiddleware(router)
 
 	log.Printf("[INFO] starting API listening on 0.0.0.0:%d", config.ListenPort)
-	log.Fatal("[ERR ] starting gin router: ", http.ListenAndServe("0.0.0.0:"+strconv.Itoa(config.ListenPort), server))
+	log.Fatalf("[ERR ] starting gin router: %s", http.ListenAndServe("0.0.0.0:"+strconv.Itoa(config.ListenPort), server))
 }
 
 func LoggingMiddleware(next http.Handler) http.Handler {
