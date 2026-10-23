@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"strings"
 )
@@ -62,4 +63,17 @@ func AnyPrefixes(s string, prefixes []string) string {
 	}
 
 	return ""
+}
+
+func WriteJson(w http.ResponseWriter, code int, obj any) {
+	w.Header().Set("Content-Type", "application/json")
+	json, err := json.Marshal(obj)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	} else {
+		w.WriteHeader(code)
+		w.Write(json)
+		return
+	}
 }

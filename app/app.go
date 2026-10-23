@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/luthermonson/go-proxmox"
 )
 
@@ -19,7 +18,6 @@ var client ProxmoxClient
 
 func Run() {
 	gob.Register(proxmox.Client{})
-	gin.SetMode(gin.ReleaseMode)
 
 	configPath := flag.String("config", "config.json", "path to config.json file")
 	flag.Parse()
@@ -30,7 +28,7 @@ func Run() {
 	token := fmt.Sprintf(`%s@%s!%s`, config.PVE.Token.User, config.PVE.Token.Realm, config.PVE.Token.ID)
 	client = NewClient(config.PVE.URL, token, config.PVE.Token.Secret)
 
-	router := gin.Default()
+	router := http.NewServeMux()
 
 	cluster := Cluster{}
 	cluster.Init(client)
@@ -59,69 +57,70 @@ func Run() {
 		}
 	}()
 
-	router.GET("/version", func(c *gin.Context) {
+	router.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		PVEVersion, err := client.Version()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+
+			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"api-version": APIVersion, "pve-version": PVEVersion})
+			WriteJson(w, http.StatusOK, map[string]any{"api-version": APIVersion, "pve-version": PVEVersion})
 		}
 	})
 
-	router.GET("/", func(c *gin.Context) {
+	router.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		callback := Callback{}
 		v, err := GetCluster(&callback, &cluster)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"cluster": v})
+			WriteJson(w, http.StatusOK, map[string]any{"cluster": v})
 		}
 		callback.Invoke()
 	})
 
-	router.GET("/nodes/:node", func(c *gin.Context) {
-		nodeid := c.Param("node")
+	router.HandleFunc("GET /nodes/{node}", func(w http.ResponseWriter, r *http.Request) {
+		nodeid := r.PathValue("node")
 		callback := Callback{}
 		node, err := GetNode(&callback, &cluster, nodeid)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"node": node})
+			WriteJson(w, http.StatusOK, map[string]any{"node": node})
 		}
 		callback.Invoke()
 	})
 
-	router.GET("/nodes/:node/instances/:vmid", func(c *gin.Context) {
-		nodeid := c.Param("node")
-		vmid, err := strconv.ParseUint(c.Param("vmid"), 10, 64)
+	router.HandleFunc("GET /nodes/{node}/instances/{vmid}", func(w http.ResponseWriter, r *http.Request) {
+		nodeid := r.PathValue("node")
+		vmid, err := strconv.ParseUint(r.PathValue("vmid"), 10, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", c.Param("instance"))})
+			WriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", r.PathValue("instance"))})
 			return
 		}
 		callback := Callback{}
 		instance, err := GetInstance(&callback, &cluster, nodeid, vmid)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"instance": instance})
+			WriteJson(w, http.StatusOK, map[string]any{"instance": instance})
 		}
 		callback.Invoke()
 	})
 
-	router.POST("/sync", func(c *gin.Context) {
+	router.HandleFunc("POST /sync", func(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[INFO] starting cluster sync\n")
 		err := cluster.Sync()
 		if err != nil {
 			log.Printf("[ERR ] failed to sync cluster: %s", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		} else {
 			return
 		}
 	})
 
-	router.POST("/nodes/:node/sync", func(c *gin.Context) {
-		nodeName := c.Param("node")
+	router.HandleFunc("POST /nodes/{node}/sync", func(w http.ResponseWriter, r *http.Request) {
+		nodeName := r.PathValue("node")
 
 		log.Printf("[INFO] starting %s sync\n", nodeName)
 
@@ -129,7 +128,7 @@ func Run() {
 		node, err := GetNode(&callback, &cluster, nodeName)
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s: %s", nodeName, err.Error())
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 			callback.Invoke()
 			return
 		}
@@ -138,16 +137,16 @@ func Run() {
 		err = node.Sync()
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s: %s", nodeName, err.Error())
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		}
 	})
 
-	router.POST("/nodes/:node/instances/:vmid/sync", func(c *gin.Context) {
-		nodeName := c.Param("node")
-		vmid, err := strconv.ParseUint(c.Param("vmid"), 10, 64)
+	router.HandleFunc("POST /nodes/{node}/instances/{vmid}/sync", func(w http.ResponseWriter, r *http.Request) {
+		nodeName := r.PathValue("node")
+		vmid, err := strconv.ParseUint(r.PathValue("vmid"), 10, 64)
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s.%d: %s", nodeName, vmid, err.Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", c.Param("instance"))})
+			WriteJson(w, http.StatusInternalServerError, map[string]any{"error": fmt.Sprintf("%s could not be converted to vmid (uint)", r.PathValue("instance"))})
 			return
 		}
 
@@ -157,7 +156,7 @@ func Run() {
 		instance, err := GetInstance(&callback, &cluster, nodeName, vmid)
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s.%d: %s", nodeName, vmid, err.Error())
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 			callback.Invoke()
 			return
 		}
@@ -166,13 +165,20 @@ func Run() {
 		err = instance.Sync()
 		if err != nil {
 			log.Printf("[ERR ] failed to sync %s.%d: %s", nodeName, vmid, err.Error())
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			WriteJson(w, http.StatusNotFound, map[string]any{"error": err.Error()})
 		}
 	})
 
+	server := LoggingMiddleware(router)
+
 	log.Printf("[INFO] starting API listening on 0.0.0.0:%d", config.ListenPort)
-	err = router.Run("0.0.0.0:" + strconv.Itoa(config.ListenPort))
-	if err != nil {
-		log.Fatalf("[Err] Error starting router: %s", err.Error())
-	}
+	log.Fatal("[ERR ] starting gin router: ", http.ListenAndServe("0.0.0.0:"+strconv.Itoa(config.ListenPort), server))
+}
+
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
+	})
 }

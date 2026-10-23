@@ -27,7 +27,6 @@ func GetCluster(callback *Callback, cluster *Cluster) (*Cluster, error) {
 
 	for _, node := range cluster.Nodes {
 		node.lock.RLock()
-		defer node.lock.RUnlock()
 		callback.Add(node.lock.RUnlock)
 		for _, instance := range node.Instances {
 			instance.lock.RLock()
