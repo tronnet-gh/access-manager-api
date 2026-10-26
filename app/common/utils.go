@@ -1,10 +1,9 @@
 package app
 
 import (
+	paas "access-manager-api/proxmoxaas-common-lib"
 	"fmt"
 	"reflect"
-
-	paas "proxmoxaas-common-lib"
 )
 
 func ParseGroupname(groupname string) (Groupname, error) {

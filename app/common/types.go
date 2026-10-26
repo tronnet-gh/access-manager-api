@@ -1,6 +1,6 @@
 package app
 
-import paas "proxmoxaas-common-lib"
+import paas "access-manager-api/proxmoxaas-common-lib"
 
 type Realm struct {
 	Type   string
