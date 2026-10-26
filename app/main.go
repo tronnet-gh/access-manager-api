@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	common "access-manager-api/app/common"
 	"access-manager-api/app/pve"
@@ -83,7 +82,7 @@ func Run() {
 	router.HandleFunc("POST /groups/{groupname}/users/{username}", POST_Group_User)
 	router.HandleFunc("DELETE /groups/{groupname}/users/{username}", DELETE_Group_User)
 
-	server := LoggingMiddleware(router)
+	server := paas.LoggingMiddleware(router)
 
 	log.Printf("[INFO] starting API listening on 0.0.0.0:%d", Config.ListenPort)
 	log.Fatalf("[ERR ] Error starting router: %s", http.ListenAndServe("0.0.0.0:"+strconv.Itoa(Config.ListenPort), server))
@@ -126,12 +125,4 @@ func GetUserSessionFromRequest(r *http.Request) (*UserSession, int, error) {
 	uuid := SessionUUID.(string)
 	usersession := UserSessions[uuid]
 	return usersession, http.StatusOK, nil
-}
-
-func LoggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
-	})
 }
