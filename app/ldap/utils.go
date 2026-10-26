@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/gin-gonic/gin"
 	"github.com/go-ldap/ldap/v3"
 
 	common "access-manager-api/app/common"
@@ -23,17 +22,17 @@ func LDAPEntryToGroup(entry *ldap.Entry) common.Group {
 	return common.Group{}
 }
 
-func ParseLDAPError(err error) gin.H {
+func ParseLDAPError(err error) map[string]any {
 	if err != nil {
 		LDAPerr := err.(*ldap.Error)
-		return gin.H{
+		return map[string]any{
 			"ok":      false,
 			"code":    LDAPerr.ResultCode,
 			"result":  ldap.LDAPResultCodeMap[LDAPerr.ResultCode],
 			"message": LDAPerr.Err.Error(),
 		}
 	} else {
-		return gin.H{
+		return map[string]any{
 			"ok":      true,
 			"code":    http.StatusOK,
 			"result":  "OK",

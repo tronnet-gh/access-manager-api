@@ -7,13 +7,13 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	common "access-manager-api/app/common"
 	"access-manager-api/app/pve"
+	paas "proxmoxaas-common-lib"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-contrib/sessions/cookie"
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/sessions"
 )
 
 type UserSession struct {
@@ -30,6 +30,7 @@ var Config common.Config
 var RootSession *UserSession
 var UserSessions map[string]*UserSession
 var Realms map[string]common.Realm
+var Store *sessions.CookieStore
 
 func Run() {
 	configPath := flag.String("config", "config.json", "path to config.json file")
@@ -38,14 +39,13 @@ func Run() {
 	// load config values
 	Config = common.GetConfig(*configPath)
 	// already exits if failed
-	log.Printf("Read in config from %s\n", *configPath)
+	log.Printf("[INFO] Read in config from %s\n", *configPath)
 
-	// setup gin
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
+	// setup http router
+	router := http.NewServeMux()
 
 	// setup api auth cookies
-	SetupAPISessionStore(router, &Config)
+	SetupAPISessionStore(&Config)
 
 	// setup root api token
 	client, code, err := pve.NewClientFromAPIToken(Config.PVE, Config.PVE.Token)
@@ -63,35 +63,33 @@ func Run() {
 	// make global session map
 	UserSessions = make(map[string]*UserSession)
 
-	router.GET("/version", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"version": Version})
+	router.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"version": Version})
 	})
 
-	router.POST("/ticket", POST_Ticket)
-	router.DELETE("/ticket", DELETE_Ticket)
-	router.GET("/pools/:poolid", GET_Pool)
-	router.POST("/pools/:poolid", POST_Pool)
-	router.DELETE("/pools/:poolid", DELETE_Pool)
-	router.GET("/groups/:groupname", GET_Group)
-	router.POST("/groups/:groupname", POST_Group)
-	router.DELETE("/groups/:groupname", DELETE_Group)
-	router.POST("/pools/:poolid/groups/:groupname", POST_Pool_Group)
-	router.DELETE("/pools/:poolid/groups/:groupname")
-	router.GET("/users/:username", GET_User)
-	router.POST("/users/:username", POST_User)
-	router.DELETE("/users/:username", DELETE_User)
-	router.POST("/groups/:groupname/users/:username", POST_Group_User)
-	router.DELETE("/groups/:groupname/users/:username", DELETE_Group_User)
+	router.HandleFunc("POST /ticket", POST_Ticket)
+	router.HandleFunc("DELETE /ticket", DELETE_Ticket)
+	router.HandleFunc("GET /pools/{poolid}", GET_Pool)
+	router.HandleFunc("POST /pools/{poolid}", POST_Pool)
+	router.HandleFunc("DELETE /pools/{poolid}", DELETE_Pool)
+	router.HandleFunc("GET /groups/{groupname}", GET_Group)
+	router.HandleFunc("POST /groups/{groupname}", POST_Group)
+	router.HandleFunc("DELETE /groups/{groupname}", DELETE_Group)
+	router.HandleFunc("POST /pools/{poolid}/groups/{groupname}", POST_Pool_Group)
+	router.HandleFunc("DELETE /pools/{poolid}/groups/{groupname}", DELETE_Pool_Group)
+	router.HandleFunc("GET /users/{username}", GET_User)
+	router.HandleFunc("POST /users/{username}", POST_User)
+	router.HandleFunc("DELETE /users/{username}", DELETE_User)
+	router.HandleFunc("POST /groups/{groupname}/users/{username}", POST_Group_User)
+	router.HandleFunc("DELETE /groups/{groupname}/users/{username}", DELETE_Group_User)
 
-	log.Printf("Starting Access Manager API on port %s\n", strconv.Itoa(Config.ListenPort))
+	server := LoggingMiddleware(router)
 
-	err = router.Run("0.0.0.0:" + strconv.Itoa(Config.ListenPort))
-	if err != nil {
-		log.Fatalf("Error starting router: %s", err.Error())
-	}
+	log.Printf("[INFO] starting API listening on 0.0.0.0:%d", Config.ListenPort)
+	log.Fatalf("[ERR ] Error starting router: %s", http.ListenAndServe("0.0.0.0:"+strconv.Itoa(Config.ListenPort), server))
 }
 
-func SetupAPISessionStore(router *gin.Engine, config *common.Config) {
+func SetupAPISessionStore(config *common.Config) {
 	authKey := make([]byte, 32)
 	encrKey := make([]byte, 32)
 	n, _ := rand.Read(authKey) // rand Read never returns an error, always crashes on error
@@ -99,25 +97,41 @@ func SetupAPISessionStore(router *gin.Engine, config *common.Config) {
 	n, _ = rand.Read(encrKey) // rand Read never returns an error, always crashes on error
 	log.Printf("Generated cookie session encryption key of length %d\n", n)
 
-	store := cookie.NewStore(authKey, encrKey)
-	store.Options(sessions.Options{
+	Store = sessions.NewCookieStore(authKey, encrKey)
+	Store.Options = &sessions.Options{
 		Path:     config.SessionCookie.Path,
 		HttpOnly: config.SessionCookie.HttpOnly,
 		Secure:   config.SessionCookie.Secure,
 		MaxAge:   config.SessionCookie.MaxAge,
-	})
-	router.Use(sessions.Sessions(config.SessionCookieName, store))
+	}
 
 	log.Printf("Started cookie store (Name: %s Params: %+v)\n", config.SessionCookieName, config.SessionCookie)
 }
 
-func GetUserSessionFromContext(c *gin.Context) (*UserSession, int, error) {
-	session := sessions.Default(c)
-	SessionUUID := session.Get("SessionUUID")
+// get the cookie session from the request, returns a new session if the cookie is missing or invalid
+func GetCookieSession(r *http.Request) *sessions.Session {
+	session, err := Store.Get(r, Config.SessionCookieName)
+	if err != nil {
+		log.Printf("Error getting session cookie: %s\n", err.Error())
+	}
+	return session
+}
+
+func GetUserSessionFromRequest(r *http.Request) (*UserSession, int, error) {
+	session := GetCookieSession(r)
+	SessionUUID := session.Values["SessionUUID"]
 	if SessionUUID == nil {
 		return nil, http.StatusUnauthorized, fmt.Errorf("no auth session found")
 	}
 	uuid := SessionUUID.(string)
 	usersession := UserSessions[uuid]
 	return usersession, http.StatusOK, nil
+}
+
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
+	})
 }

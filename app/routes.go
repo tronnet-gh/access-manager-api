@@ -5,27 +5,31 @@ import (
 	ldap "access-manager-api/app/ldap"
 	"access-manager-api/app/localdb"
 	pve "access-manager-api/app/pve"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	paas "proxmoxaas-common-lib"
 	"uuid"
 
-	"github.com/gin-contrib/sessions"
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/sessions"
 )
 
-func POST_Ticket(c *gin.Context) {
+func POST_Ticket(w http.ResponseWriter, r *http.Request) {
 	body := common.Login{}
-	err := c.ShouldBindJSON(&body)
-	if err != nil { // bad request from binding
-		c.JSON(http.StatusBadRequest, gin.H{"auth": false, "error": err.Error()})
+	err := json.NewDecoder(r.Body).Decode(&body)
+	if err != nil { // bad request from decoding
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"auth": false, "error": err.Error()})
+		return
+	}
+	if body.UsernameRaw == "" || body.Password == "" { // username and password are required
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"auth": false, "error": "missing required field username or password"})
 		return
 	}
 
 	// attempt to parse username
 	body.Username, err = paas.ParseUsername(body.UsernameRaw)
 	if err != nil { // username format incorrect
-		c.JSON(http.StatusBadRequest, gin.H{"auth": false, "error": err.Error()})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"auth": false, "error": err.Error()})
 		return
 	}
 	handler := Realms[body.Username.Realm].Type
@@ -35,7 +39,7 @@ func POST_Ticket(c *gin.Context) {
 	// always bind proxmox backend
 	PVEClient, code, err := pve.NewClientFromCredentials(Config.PVE, body.Username, body.Password)
 	if err != nil { // pve client failed to bind
-		c.JSON(code, gin.H{"auth": false, "error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"auth": false, "error": err.Error()})
 		return
 	}
 	userbackends.PVE = PVEClient
@@ -47,102 +51,102 @@ func POST_Ticket(c *gin.Context) {
 		config := Realms[body.Username.Realm].Config.(common.LDAPConfig)
 		LDAPClient, code, err := ldap.NewClientFromCredentials(config, body.Username, body.Password)
 		if err != nil { // ldap client failed to bind
-			c.JSON(code, gin.H{"auth": false, "error": err.Error()})
+			paas.HTTPWriteJson(w, code, map[string]any{"auth": false, "error": err.Error()})
 			return
 		}
 		userbackends.Realm.Name = body.Username.Realm
 		userbackends.Realm.Handler = LDAPClient
 	default:
-		c.JSON(code, gin.H{"auth": false, "error": fmt.Errorf("user realm %s is not supported", body.Username.Realm)})
+		paas.HTTPWriteJson(w, code, map[string]any{"auth": false, "error": fmt.Errorf("user realm %s is not supported", body.Username.Realm)})
 		return
 	}
 
 	// failing to load lcoaldb is a fatal error
 	userbackends.DB, code, err = localdb.NewClientFromCredentials(Config.LocalDB, body.Username, body.Password)
 	if err != nil {
-		c.JSON(code, gin.H{"auth": false, "error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"auth": false, "error": err.Error()})
 		return
 	}
 
 	// successful binding at this point
 	// create new session
-	session := sessions.Default(c)
+	session := GetCookieSession(r)
 	// create random uuid to map user to backends
 	uuid := uuid.NewV4()
 	// set uuid mapping in session
-	session.Set("SessionUUID", uuid.String())
+	session.Values["SessionUUID"] = uuid.String()
 	// set uuid mapping in LDAPSessions
 	UserSessions[uuid.String()] = &userbackends
 	// save the session
-	err = session.Save()
+	err = session.Save(r, w)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"auth": false, "error": err.Error()})
+		paas.HTTPWriteJson(w, http.StatusInternalServerError, map[string]any{"auth": false, "error": err.Error()})
 	} else {
 		// return successful auth
-		c.JSON(http.StatusOK, gin.H{"auth": true})
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"auth": true})
 	}
 }
 
-func DELETE_Ticket(c *gin.Context) {
+func DELETE_Ticket(w http.ResponseWriter, r *http.Request) {
 	// get session uuid from session cookie
-	session := sessions.Default(c)
-	SessionUUID := session.Get("SessionUUID")
+	session := GetCookieSession(r)
+	SessionUUID := session.Values["SessionUUID"]
 	if SessionUUID == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"auth": false})
+		paas.HTTPWriteJson(w, http.StatusUnauthorized, map[string]any{"auth": false})
 		return
 	}
 	uuid := SessionUUID.(string)
 
 	// delete uuid entry from user sessions
-	delete(UserSessions, uuid)                    // deletes uuid mapping
-	session.Options(sessions.Options{MaxAge: -1}) // set max age to -1 so session cookie is deleted
-	err := session.Save()                         // if save somehow fails, it should be ok since the uuid mapping is already deleted
+	delete(UserSessions, uuid)                      // deletes uuid mapping
+	session.Options = &sessions.Options{MaxAge: -1} // set max age to -1 so session cookie is deleted
+	err := session.Save(r, w)                       // if save somehow fails, it should be ok since the uuid mapping is already deleted
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"auth": false})
+		paas.HTTPWriteJson(w, http.StatusInternalServerError, map[string]any{"auth": false})
 	} else {
-		c.JSON(http.StatusUnauthorized, gin.H{"auth": false})
+		paas.HTTPWriteJson(w, http.StatusUnauthorized, map[string]any{"auth": false})
 	}
 }
 
-func GET_Pool(c *gin.Context) {
-	poolid, ok := c.Params.Get("poolid")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
+func GET_Pool(w http.ResponseWriter, r *http.Request) {
+	poolid := r.PathValue("poolid")
+	if poolid == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter poolid")})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	pool, code, err := GetPool(backends, poolid)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.JSON(http.StatusOK, gin.H{"pool": pool})
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"pool": pool})
 	}
 }
 
-func POST_Pool(c *gin.Context) {
-	poolid, ok := c.Params.Get("poolid")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
+func POST_Pool(w http.ResponseWriter, r *http.Request) {
+	poolid := r.PathValue("poolid")
+	if poolid == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter poolid")})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	// read request body
 	pool := common.Pool{}
-	err = c.ShouldBindJSON(&pool)
-	if err != nil { // failed binding, usually missing user field
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err = json.NewDecoder(r.Body).Decode(&pool)
+	if err != nil { // failed decoding, usually malformed json
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
 
@@ -151,91 +155,91 @@ func POST_Pool(c *gin.Context) {
 	if code == http.StatusNotFound { // pool does not already exist, create new pool
 		code, err = NewPool(backends, poolid, pool)
 		if err != nil {
-			c.JSON(code, gin.H{"error": err.Error()})
+			paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		} else {
-			c.Status(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
 		}
 	} else {
 		code, err = ModPool(backends, poolid, pool)
 		if err != nil {
-			c.JSON(code, gin.H{"error": err.Error()})
+			paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		} else {
-			c.Status(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
 		}
 	}
 }
 
-func DELETE_Pool(c *gin.Context) {
-	poolid, ok := c.Params.Get("poolid")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
+func DELETE_Pool(w http.ResponseWriter, r *http.Request) {
+	poolid := r.PathValue("poolid")
+	if poolid == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter poolid")})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	code, err = DelPool(backends, poolid)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.Status(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
-func GET_Group(c *gin.Context) {
-	groupname_str, ok := c.Params.Get("groupname")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
+func GET_Group(w http.ResponseWriter, r *http.Request) {
+	groupname_str := r.PathValue("groupname")
+	if groupname_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter poolid")})
 		return
 	}
 
 	groupname, err := common.ParseGroupname(groupname_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	group, code, err := GetGroup(backends, groupname)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.JSON(http.StatusOK, gin.H{"group": group})
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"group": group})
 	}
 }
 
-func POST_Group(c *gin.Context) {
-	groupname_str, ok := c.Params.Get("groupname")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+func POST_Group(w http.ResponseWriter, r *http.Request) {
+	groupname_str := r.PathValue("groupname")
+	if groupname_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
 	groupname, err := paas.ParseGroupname(groupname_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	// read request body
 	group := common.Group{}
-	err = c.ShouldBindJSON(&group)
-	if err != nil { // failed binding, usually missing user field
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err = json.NewDecoder(r.Body).Decode(&group)
+	if err != nil { // failed decoding, usually malformed json
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
 
@@ -244,163 +248,163 @@ func POST_Group(c *gin.Context) {
 	if code == http.StatusNotFound { // group does not already exist, create new group
 		code, err = NewGroup(backends, groupname, group)
 		if err != nil {
-			c.JSON(code, gin.H{"error": err.Error()})
+			paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		} else {
-			c.Status(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
 		}
 	} else {
 		code, err = ModGroup(backends, groupname, group)
 		if err != nil {
-			c.JSON(code, gin.H{"error": err.Error()})
+			paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		} else {
-			c.Status(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
 		}
 	}
 }
 
-func DELETE_Group(c *gin.Context) {
-	groupname_str, ok := c.Params.Get("groupname")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+func DELETE_Group(w http.ResponseWriter, r *http.Request) {
+	groupname_str := r.PathValue("groupname")
+	if groupname_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
 	groupname, err := paas.ParseGroupname(groupname_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	code, err = DelGroup(backends, groupname)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.Status(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
-func POST_Pool_Group(c *gin.Context) {
-	poolid, ok := c.Params.Get("poolid")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
+func POST_Pool_Group(w http.ResponseWriter, r *http.Request) {
+	poolid := r.PathValue("poolid")
+	if poolid == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter poolid")})
 		return
 	}
 
-	groupname_str, ok := c.Params.Get("groupname")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+	groupname_str := r.PathValue("groupname")
+	if groupname_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
 	groupname, err := paas.ParseGroupname(groupname_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	code, err = AddGroupToPool(backends, groupname, poolid)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.Status(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
-func DELETE_Pool_Group(c *gin.Context) {
-	poolid, ok := c.Params.Get("poolid")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
+func DELETE_Pool_Group(w http.ResponseWriter, r *http.Request) {
+	poolid := r.PathValue("poolid")
+	if poolid == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter poolid")})
 		return
 	}
 
-	groupname_str, ok := c.Params.Get("groupname")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+	groupname_str := r.PathValue("groupname")
+	if groupname_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
 	groupname, err := paas.ParseGroupname(groupname_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	code, err = DelGroupFromPool(backends, groupname, poolid)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.Status(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
-func GET_User(c *gin.Context) {
-	username_str, ok := c.Params.Get("username")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter poolid")})
+func GET_User(w http.ResponseWriter, r *http.Request) {
+	username_str := r.PathValue("username")
+	if username_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter poolid")})
 		return
 	}
 
 	username, err := common.ParseUsername(username_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	user, code, err := GetUser(backends, username)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.JSON(http.StatusOK, gin.H{"user": user})
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"user": user})
 	}
 }
 
-func POST_User(c *gin.Context) {
-	username_str, ok := c.Params.Get("username")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+func POST_User(w http.ResponseWriter, r *http.Request) {
+	username_str := r.PathValue("username")
+	if username_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
 	username, err := paas.ParseUsername(username_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	// read request body
 	user := common.User{}
-	err = c.ShouldBindJSON(&user)
-	if err != nil { // failed binding, usually missing user field
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	err = json.NewDecoder(r.Body).Decode(&user)
+	if err != nil { // failed decoding, usually malformed json
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err.Error()})
 		return
 	}
 
@@ -409,121 +413,121 @@ func POST_User(c *gin.Context) {
 	if code == http.StatusNotFound { // user does not already exist, create new user
 		code, err = NewUser(backends, username, user)
 		if err != nil {
-			c.JSON(code, gin.H{"error": err.Error()})
+			paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		} else {
-			c.Status(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
 		}
 	} else {
 		code, err = ModUser(backends, username, user)
 		if err != nil {
-			c.JSON(code, gin.H{"error": err.Error()})
+			paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		} else {
-			c.Status(http.StatusOK)
+			w.WriteHeader(http.StatusOK)
 		}
 	}
 }
 
-func DELETE_User(c *gin.Context) {
-	username_str, ok := c.Params.Get("username")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+func DELETE_User(w http.ResponseWriter, r *http.Request) {
+	username_str := r.PathValue("username")
+	if username_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
 	username, err := paas.ParseUsername(username_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	code, err = DelUser(backends, username)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.Status(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
-func POST_Group_User(c *gin.Context) {
-	groupname_str, ok := c.Params.Get("groupname")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+func POST_Group_User(w http.ResponseWriter, r *http.Request) {
+	groupname_str := r.PathValue("groupname")
+	if groupname_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
-	username_str, ok := c.Params.Get("username")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter username")})
+	username_str := r.PathValue("username")
+	if username_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter username")})
 		return
 	}
 
 	groupname, err := paas.ParseGroupname(groupname_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
 	username, err := paas.ParseUsername(username_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	code, err = AddUserToGroup(backends, username, groupname)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.Status(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
-func DELETE_Group_User(c *gin.Context) {
-	groupname_str, ok := c.Params.Get("groupname")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter groupname")})
+func DELETE_Group_User(w http.ResponseWriter, r *http.Request) {
+	groupname_str := r.PathValue("groupname")
+	if groupname_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter groupname")})
 		return
 	}
 
-	username_str, ok := c.Params.Get("username")
-	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Errorf("missing required path parameter username")})
+	username_str := r.PathValue("username")
+	if username_str == "" {
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": fmt.Errorf("missing required path parameter username")})
 		return
 	}
 
 	groupname, err := paas.ParseGroupname(groupname_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
 	username, err := paas.ParseUsername(username_str)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err})
+		paas.HTTPWriteJson(w, http.StatusBadRequest, map[string]any{"error": err})
 		return
 	}
 
-	backends, code, err := GetUserSessionFromContext(c)
+	backends, code, err := GetUserSessionFromRequest(r)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 		return
 	}
 
 	code, err = DelUserFromGroup(backends, username, groupname)
 	if err != nil {
-		c.JSON(code, gin.H{"error": err.Error()})
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
-		c.Status(http.StatusOK)
+		w.WriteHeader(http.StatusOK)
 	}
 }
