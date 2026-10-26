@@ -5,10 +5,7 @@ go 1.27.3
 require (
 	github.com/luthermonson/go-proxmox v0.8.2
 	golang.org/x/sync v0.24.0
-	proxmoxaas-common-lib v0.0.0
 )
-
-replace proxmoxaas-common-lib => ./proxmoxaas-common-lib
 
 require (
 	github.com/anchore/go-lzo v0.1.0 // indirect
