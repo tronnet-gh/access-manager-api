@@ -170,16 +170,8 @@ func Run() {
 		}
 	})
 
-	server := LoggingMiddleware(router)
+	server := paas.LoggingMiddleware(router)
 
 	log.Printf("[INFO] starting API listening on 0.0.0.0:%d", config.ListenPort)
 	log.Fatalf("[ERR ] starting gin router: %s", http.ListenAndServe("0.0.0.0:"+strconv.Itoa(config.ListenPort), server))
-}
-
-func LoggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
-	})
 }
