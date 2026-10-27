@@ -1,5 +1,5 @@
 {
-    "listenPort": 80,
+    "listenPort": 8082,
     "pve": {
         "url": "https://<proxmox host>/api2/json",
         "token": {
