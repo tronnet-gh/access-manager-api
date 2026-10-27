@@ -11,7 +11,6 @@ access-manager-api provides functionality for the API by implementing a single s
 1. Download `access-manager-api` binary and `template.config.json` file from releases
 2. Rename `template.config.json` to `config.json` and modify the following values:
     1. `listenPort`: port for access-manager-api to bind and listen on
-    2. In `pve`:
-        - `url`: the URI to the Proxmox API, ie `https://pve.domain.net/api2/json`
-        - `token`: the `proxmoxaas-api` user(name), authentication realm (pam), token id, and token secrey key (uuid)
-        - `paas-client-role`: name of the Role which represents PAAS users, ie `PAAS-Client`
+    2. `url`: the URI to the Proxmox API, ie `https://pve.domain.net/api2/json`
+    3. `token`: the `proxmoxaas-api` API token user(name), authentication realm (pam), token id, and token secrey key (uuid)
+    4. `paas-client-role`: name of the Role which represents PAAS users, ie `PAAS-Client`
