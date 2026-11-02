@@ -28,12 +28,12 @@ func NewClientFromCredentials(config common.LocalDBConfig, username common.Usern
 	}
 }
 
-func (localdb DB) GetPool(poolname string) (common.Pool, []string, int, error) {
+func (localdb DB) GetPool(poolname string) (common.Pool, []common.Group, int, error) {
 	pool, ok := localdb.data[poolname]
 	if !ok {
-		return pool, []string{}, http.StatusNotFound, fmt.Errorf("localdb pool %s does not exist", poolname)
+		return pool, []common.Group{}, http.StatusNotFound, fmt.Errorf("localdb pool %s does not exist", poolname)
 	}
-	return pool, []string{}, http.StatusOK, nil
+	return pool, []common.Group{}, http.StatusOK, nil
 }
 
 func (localdb DB) NewPool(poolname string, pool common.Pool) (int, error) {
@@ -87,8 +87,8 @@ func (localdb DB) ModGroup(groupname common.Groupname, group common.Group) (int,
 	return http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
 }
 
-func (localdb DB) GetGroup(groupname common.Groupname) (common.Group, []string, int, error) {
-	return common.Group{}, []string{}, http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
+func (localdb DB) GetGroup(groupname common.Groupname) (common.Group, []common.User, int, error) {
+	return common.Group{}, []common.User{}, http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
 }
 
 func (localdb DB) DelGroup(groupname common.Groupname) (int, error) {

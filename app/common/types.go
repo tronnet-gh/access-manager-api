@@ -10,11 +10,11 @@ type Realm struct {
 type Backend interface {
 	NewPool(poolname string, pool Pool) (int, error)
 	ModPool(poolname string, pool Pool) (int, error)
-	GetPool(poolname string) (Pool, []string, int, error) // []string members
+	GetPool(poolname string) (Pool, []Group, int, error) // []string members
 	DelPool(poolname string) (int, error)
 	NewGroup(groupname Groupname, group Group) (int, error)
 	ModGroup(groupname Groupname, group Group) (int, error)
-	GetGroup(groupname Groupname) (Group, []string, int, error) // []string members
+	GetGroup(groupname Groupname) (Group, []User, int, error) // []string members
 	DelGroup(groupname Groupname) (int, error)
 	AddGroupToPool(groupname Groupname, poolname string) (int, error)
 	DelGroupFromPool(groupname Groupname, poolname string) (int, error)

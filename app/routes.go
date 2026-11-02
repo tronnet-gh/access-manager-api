@@ -49,6 +49,7 @@ func POST_Ticket(w http.ResponseWriter, r *http.Request) {
 	case "pve":
 	case "ldap":
 		config := Realms[body.Username.Realm].Config.(common.LDAPConfig)
+		config.RealmName = body.Username.Realm
 		LDAPClient, code, err := ldap.NewClientFromCredentials(config, body.Username, body.Password)
 		if err != nil { // ldap client failed to bind
 			paas.HTTPWriteJson(w, code, map[string]any{"auth": false, "error": err.Error()})

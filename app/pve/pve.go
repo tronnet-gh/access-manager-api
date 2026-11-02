@@ -18,6 +18,8 @@ type ProxmoxClient struct {
 	client *proxmox.Client
 }
 
+var RootClient *ProxmoxClient
+
 // creates a new client binding with associated permissions
 func NewClientFromCredentials(config common.PVEConfig, username common.Username, password string) (common.Backend, int, error) {
 	HTTPClient := http.Client{
@@ -43,7 +45,7 @@ func NewClientFromCredentials(config common.PVEConfig, username common.Username,
 }
 
 // creates a new client binding with associated permissions
-func NewClientFromAPIToken(config common.PVEConfig, token common.PVEAPIToken) (common.Backend, int, error) {
+func NewRootClientFromAPIToken(config common.PVEConfig, token common.PVEAPIToken) (int, error) {
 	HTTPClient := http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{},
@@ -58,10 +60,12 @@ func NewClientFromAPIToken(config common.PVEConfig, token common.PVEAPIToken) (c
 	// version route is accessible to any authenticated user
 	_, err := client.Version(context.Background())
 	if err != nil { // could not get version so therefore the user is not authenticated
-		return nil, http.StatusUnauthorized, err
+		return http.StatusUnauthorized, err
 	}
 
-	return ProxmoxClient{config: &config, client: client}, http.StatusOK, nil
+	RootClient = &ProxmoxClient{config: &config, client: client}
+
+	return http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) SyncRealms() (int, error) {
@@ -155,9 +159,9 @@ func (pve ProxmoxClient) ModPool(poolname string, pool common.Pool) (int, error)
 	return http.StatusOK, nil
 }
 
-func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []string, int, error) {
+func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []common.Group, int, error) {
 	pool := common.Pool{}
-	members := []string{}
+	members := []common.Group{}
 
 	pvepool, err := pve.client.Pool(context.Background(), poolname)
 	if IsProxmoxNotFound(err) { // errors if pool does not exist
@@ -168,7 +172,7 @@ func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []string, int, e
 
 	pool.PoolID = pvepool.PoolID
 
-	acls, err := pve.client.ACL(context.Background())
+	acls, err := RootClient.client.ACL(context.Background())
 	if proxmox.IsNotAuthorized(err) { // errors if pool does not exist
 		return pool, members, http.StatusUnauthorized, err
 	} else if err != nil {
@@ -177,8 +181,20 @@ func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []string, int, e
 
 	// iterate through ACLs and get superficial pool - group membershipm (just group names)
 	for _, acl := range acls {
-		if acl.Type == "group" && acl.RoleID == pve.config.PAASClientRole && acl.Path == fmt.Sprintf("/pool/%s", poolname) {
-			members = append(members, acl.UGID)
+		if acl.Type == "group" && acl.Path == fmt.Sprintf("/pool/%s", poolname) {
+			if acl.RoleID == pve.config.PAASClientRole {
+				groupname, err := common.ParseGroupname(acl.UGID)
+				if err != nil {
+					return pool, members, http.StatusInternalServerError, fmt.Errorf("pool %s had member %s which is not a valid groupname", poolname, acl.UGID)
+				}
+				members = append(members, common.Group{Groupname: groupname, Role: acl.RoleID})
+			} else if acl.RoleID == pve.config.PAASAdminRole {
+				groupname, err := common.ParseGroupname(acl.UGID)
+				if err != nil {
+					return pool, members, http.StatusInternalServerError, fmt.Errorf("pool %s had member %s which is not a valid groupname", poolname, acl.UGID)
+				}
+				members = append(members, common.Group{Groupname: groupname, Role: acl.RoleID, IsAdmin: true})
+			}
 		}
 	}
 
@@ -222,9 +238,9 @@ func (pve ProxmoxClient) ModGroup(groupname common.Groupname, group common.Group
 	return http.StatusOK, nil
 }
 
-func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []string, int, error) {
+func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []common.User, int, error) {
 	group := common.Group{}
-	members := []string{}
+	members := []common.User{}
 	pvegroup, err := pve.client.Group(context.Background(), groupname.ToString())
 	if IsProxmoxNotFound(err) { // errors if pool does not exist
 		return group, members, http.StatusNotFound, err
@@ -234,7 +250,13 @@ func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []s
 
 	group.Groupname, _ = common.ParseGroupname(pvegroup.GroupID)
 
-	members = append(members, pvegroup.Members...)
+	for _, member := range pvegroup.Members {
+		username, err := common.ParseUsername(member)
+		if err != nil {
+			return group, members, http.StatusInternalServerError, fmt.Errorf("group %s had member %s which is not a valid username", groupname, member)
+		}
+		members = append(members, common.User{Username: username})
+	}
 
 	return group, members, http.StatusOK, nil
 }

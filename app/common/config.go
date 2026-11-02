@@ -10,14 +10,16 @@ type PVEConfig struct {
 	URL            string      `json:"url"`
 	Token          PVEAPIToken `json:"token"`
 	PAASClientRole string      `json:"paas-client-role"`
+	PAASAdminRole  string      `json:"paas-admin-role"`
 }
 
 type LDAPConfig struct {
-	BaseDN   string `json:""`
-	Hostname string
-	StartTLS bool
-	TLS      bool
-	Verify   bool
+	RealmName string
+	BaseDN    string `json:""`
+	Hostname  string
+	StartTLS  bool
+	TLS       bool
+	Verify    bool
 }
 
 type LocalDBConfig struct {

@@ -169,9 +169,9 @@ func (l LDAPClient) DelUser(username common.Username) (int, error) {
 	return http.StatusOK, nil
 }
 
-func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, []string, int, error) {
+func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, []common.User, int, error) {
 	group := common.Group{}
-	members := []string{}
+	members := []common.User{}
 
 	searchRequest := ldap.NewSearchRequest( //  setup search for user by uid
 		fmt.Sprintf("cn=%s,ou=groups,%s", groupname.GroupID, l.config.BaseDN), // The base dn to search
@@ -191,9 +191,18 @@ func (l LDAPClient) GetGroup(groupname common.Groupname) (common.Group, []string
 	entry := searchResponse.Entries[0]
 	group = LDAPEntryToGroup(entry)
 	group.Groupname = groupname
-	for _, member := range entry.GetAttributeValues("member") {
-		if member != "" {
-			members = append(members, member)
+	for _, memberdn := range entry.GetAttributeValues("member") {
+		if memberdn != "" {
+			ldapuid, err := ExtractUIDFromUserDN(memberdn)
+			if err != nil {
+				return group, members, http.StatusInternalServerError, fmt.Errorf("group %s had member %s which is not a valid user DN", groupname.ToString(), memberdn)
+			}
+			userid := fmt.Sprintf("%s@%s", ldapuid, l.config.RealmName)
+			username, err := common.ParseUsername(userid)
+			if err != nil {
+				return group, members, http.StatusInternalServerError, fmt.Errorf("group %s had member %s which is not a valid username", groupname, userid)
+			}
+			members = append(members, common.User{Username: username})
 		}
 	}
 	return group, members, http.StatusOK, nil
@@ -285,8 +294,8 @@ func (l LDAPClient) ModPool(poolname string, pool common.Pool) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }
 
-func (l LDAPClient) GetPool(poolname string) (common.Pool, []string, int, error) {
-	return common.Pool{}, []string{}, http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
+func (l LDAPClient) GetPool(poolname string) (common.Pool, []common.Group, int, error) {
+	return common.Pool{}, []common.Group{}, http.StatusNotImplemented, fmt.Errorf("ldap does not implement pools")
 }
 
 func (l LDAPClient) DelPool(poolname string) (int, error) {

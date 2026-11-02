@@ -2,7 +2,6 @@ package app
 
 import (
 	common "access-manager-api/app/common"
-	"access-manager-api/app/ldap"
 	"access-manager-api/app/pve"
 	"fmt"
 	"net/http"
@@ -68,17 +67,15 @@ func GetPool(backends *UserSession, poolname string) (common.Pool, int, error) {
 	pool.Templates = dbpool.Templates
 
 	// pool members are groups
-	for _, groupid := range members {
-		groupname, err := common.ParseGroupname(groupid)
-		if err != nil {
-			return pool, code, fmt.Errorf("pool %s had member %s which is not a valid groupname", poolname, groupid)
-		}
+	for _, grouppart := range members {
+		groupname := grouppart.Groupname
 		group, code, err := GetGroup(backends, groupname)
 		if err != nil {
 			return pool, code, err
 		}
 		// members already are filtered by PAASClientRole
-		group.Role = Config.PVE.PAASClientRole
+		group.Role = grouppart.Role
+		group.IsAdmin = grouppart.IsAdmin
 		pool.Groups = append(pool.Groups, group)
 	}
 
@@ -105,7 +102,7 @@ func NewGroup(backends *UserSession, groupname common.Groupname, group common.Gr
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
 	}
@@ -120,7 +117,7 @@ func ModGroup(backends *UserSession, groupname common.Groupname, group common.Gr
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
 	}
@@ -134,11 +131,8 @@ func GetGroup(backends *UserSession, groupname common.Groupname) (common.Group, 
 			return group, code, err
 		}
 		// group members are users
-		for _, userid := range members {
-			username, err := common.ParseUsername(userid)
-			if err != nil {
-				return group, http.StatusInternalServerError, fmt.Errorf("group %s had member %s which is not a valid username", groupname.ToString(), userid)
-			}
+		for _, user := range members {
+			username := user.Username
 			// fetch and append user
 			user, code, err := GetUser(backends, username)
 			if err != nil {
@@ -153,19 +147,9 @@ func GetGroup(backends *UserSession, groupname common.Groupname) (common.Group, 
 		if err != nil {
 			return common.Group{}, code, err
 		}
-		// group mambers are users
-		for _, userdn := range members {
-			// member list is of ldap user DN instead of pve userid
-			ldapuid, err := ldap.ExtractUIDFromUserDN(userdn)
-			if err != nil {
-				return group, http.StatusInternalServerError, fmt.Errorf("group %s had member %s which is not a valid user DN", groupname.ToString(), userdn)
-			}
-			// generate username from user DN (slightly inefficient)
-			userid := fmt.Sprintf("%s@%s", ldapuid, backends.Realm.Name)
-			username, err := common.ParseUsername(userid)
-			if err != nil {
-				return group, http.StatusInternalServerError, fmt.Errorf("group %s had member %s which is not a valid username", groupname.ToString(), userid)
-			}
+		// group members are users
+		for _, user := range members {
+			username := user.Username
 			// fetch and append user
 			user, code, err := GetUser(backends, username)
 			if err != nil {
@@ -189,7 +173,7 @@ func DelGroup(backends *UserSession, groupname common.Groupname) (int, error) {
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested group")
 	}
@@ -214,7 +198,7 @@ func NewUser(backends *UserSession, username common.Username, user common.User) 
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
@@ -229,7 +213,7 @@ func ModUser(backends *UserSession, username common.Username, user common.User) 
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
@@ -263,7 +247,7 @@ func DelUser(backends *UserSession, username common.Username) (int, error) {
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else {
 		return http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
@@ -284,7 +268,7 @@ func AddUserToGroup(backends *UserSession, username common.Username, groupname c
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else { // req user in proxmox and req group in realm (not possible to do)
 		return http.StatusUnauthorized, fmt.Errorf("cannot add %s to %s", username.ToString(), groupname.ToString())
 	}
@@ -305,7 +289,7 @@ func DelUserFromGroup(backends *UserSession, username common.Username, groupname
 		if err != nil {
 			return code, err
 		}
-		return RootSession.PVE.(pve.ProxmoxClient).SyncRealms()
+		return pve.RootClient.SyncRealms()
 	} else { // req user in proxmox and req group in realm (not possible to do)
 		return http.StatusUnauthorized, fmt.Errorf("cannot delete %s from %s", username.ToString(), groupname.ToString())
 	}

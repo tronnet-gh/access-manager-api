@@ -15,8 +15,9 @@ import (
 )
 
 type UserSession struct {
-	PVE   common.Backend
-	Realm struct {
+	PVERootClient common.Backend
+	PVE           common.Backend
+	Realm         struct {
 		Name    string
 		Handler common.Backend
 	}
@@ -25,7 +26,6 @@ type UserSession struct {
 
 var Version = "1.0.0"
 var Config common.Config
-var RootSession *UserSession
 var UserSessions map[string]*UserSession
 var Realms map[string]common.Realm
 var Store *sessions.CookieStore
@@ -46,17 +46,14 @@ func Run() {
 	SetupAPISessionStore(&Config)
 
 	// setup root api token
-	client, code, err := pve.NewClientFromAPIToken(Config.PVE, Config.PVE.Token)
+	code, err := pve.NewRootClientFromAPIToken(Config.PVE, Config.PVE.Token)
 	if err != nil {
 		log.Fatalf("error initializing pve root client: %d %s", code, err)
-	}
-	RootSession = &UserSession{
-		PVE: client,
 	}
 
 	// get realms from proxmox
 	Realms = make(map[string]common.Realm)
-	Realms = RootSession.PVE.(pve.ProxmoxClient).GetRealms()
+	Realms = pve.RootClient.GetRealms()
 
 	// make global session map
 	UserSessions = make(map[string]*UserSession)
