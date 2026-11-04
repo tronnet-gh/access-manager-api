@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"strings"
 
 	common "access-manager-api/app/common"
 
@@ -181,7 +182,12 @@ func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []common.Group, 
 
 	// iterate through ACLs and get superficial pool - group membershipm (just group names)
 	for _, acl := range acls {
-		if acl.Type == "group" && acl.Path == fmt.Sprintf("/pool/%s", poolname) {
+		pool_acl_path := fmt.Sprintf("/pool/%s", poolname)
+		// if propogate is true and acl.Path is a prefix of the pool_acl_path
+		// or if the acl.Path matches exactly pool_acl_path
+		// it is a relevant acl line
+		is_relevant_acl := (acl.Propagate == true && strings.HasPrefix(pool_acl_path, acl.Path)) || pool_acl_path == acl.Path
+		if acl.Type == "group" && is_relevant_acl {
 			if acl.RoleID == pve.config.PAASClientRole {
 				groupname, err := common.ParseGroupname(acl.UGID)
 				if err != nil {
