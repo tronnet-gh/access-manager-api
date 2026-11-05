@@ -144,7 +144,7 @@ func (pve ProxmoxClient) GetRealms() map[string]common.Realm {
 	return realms
 }
 
-func (pve ProxmoxClient) NewPool(poolname string, pool common.Pool) (int, error) {
+func (pve ProxmoxClient) NewPool(poolname common.Poolname, pool common.Pool) (int, error) {
 	err := pve.client.NewPool(context.Background(), poolname, "")
 	if proxmox.IsNotAuthorized(err) {
 		return http.StatusUnauthorized, err
@@ -155,12 +155,12 @@ func (pve ProxmoxClient) NewPool(poolname string, pool common.Pool) (int, error)
 	}
 }
 
-func (pve ProxmoxClient) ModPool(poolname string, pool common.Pool) (int, error) {
+func (pve ProxmoxClient) ModPool(poolname common.Poolname, pool common.Pool) (int, error) {
 	// no-op
 	return http.StatusOK, nil
 }
 
-func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []common.Group, int, error) {
+func (pve ProxmoxClient) GetPool(poolname common.Poolname) (common.Pool, []common.Group, int, error) {
 	pool := common.Pool{}
 	members := []common.Group{}
 
@@ -186,7 +186,7 @@ func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []common.Group, 
 		// if propogate is true and acl.Path is a prefix of the pool_acl_path
 		// or if the acl.Path matches exactly pool_acl_path
 		// it is a relevant acl line
-		is_relevant_acl := (acl.Propagate == true && strings.HasPrefix(pool_acl_path, acl.Path)) || pool_acl_path == acl.Path
+		is_relevant_acl := (bool(acl.Propagate) && strings.HasPrefix(pool_acl_path, acl.Path)) || pool_acl_path == acl.Path
 		if acl.Type == "group" && is_relevant_acl {
 			if acl.RoleID == pve.config.PAASClientRole {
 				groupname, err := common.ParseGroupname(acl.UGID)
@@ -207,7 +207,24 @@ func (pve ProxmoxClient) GetPool(poolname string) (common.Pool, []common.Group, 
 	return pool, members, http.StatusOK, nil
 }
 
-func (pve ProxmoxClient) DelPool(poolname string) (int, error) {
+func (pve ProxmoxClient) GetAllPoolnames() ([]common.Poolname, int, error) {
+	poolnames := []common.Poolname{}
+
+	pvepools, err := pve.client.Pools(context.Background())
+	if IsProxmoxNotFound(err) { // errors if pool does not exist
+		return poolnames, http.StatusNotFound, err
+	} else if err != nil {
+		return poolnames, http.StatusInternalServerError, err
+	}
+
+	for _, pvepool := range pvepools {
+		poolnames = append(poolnames, pvepool.PoolID)
+	}
+
+	return poolnames, http.StatusOK, nil
+}
+
+func (pve ProxmoxClient) DelPool(poolname common.Poolname) (int, error) {
 	pvepool, err := pve.client.Pool(context.Background(), poolname)
 	if proxmox.IsNotAuthorized(err) { // not authorized to delete
 		return http.StatusUnauthorized, err
@@ -267,6 +284,27 @@ func (pve ProxmoxClient) GetGroup(groupname common.Groupname) (common.Group, []c
 	return group, members, http.StatusOK, nil
 }
 
+func (pve ProxmoxClient) GetAllGroupnames() ([]common.Groupname, int, error) {
+	groupnames := []common.Groupname{}
+
+	pvegroups, err := pve.client.Groups(context.Background())
+	if IsProxmoxNotFound(err) { // errors if pool does not exist
+		return groupnames, http.StatusNotFound, err
+	} else if err != nil {
+		return groupnames, http.StatusInternalServerError, err
+	}
+
+	for _, pvegroup := range pvegroups {
+		groupname, err := common.ParseGroupname(pvegroup.GroupID)
+		if err != nil {
+			return groupnames, http.StatusInternalServerError, err
+		}
+		groupnames = append(groupnames, groupname)
+	}
+
+	return groupnames, http.StatusOK, nil
+}
+
 func (pve ProxmoxClient) DelGroup(groupname common.Groupname) (int, error) {
 	pvegroup, err := pve.client.Group(context.Background(), groupname.GroupID)
 	if proxmox.IsNotAuthorized(err) {
@@ -287,7 +325,7 @@ func (pve ProxmoxClient) DelGroup(groupname common.Groupname) (int, error) {
 	}
 }
 
-func (pve ProxmoxClient) AddGroupToPool(groupname common.Groupname, poolname string) (int, error) {
+func (pve ProxmoxClient) AddGroupToPool(groupname common.Groupname, poolname common.Poolname) (int, error) {
 	// adds the group to the pool with the predetermined PAAS client role
 	err := pve.client.UpdateACL(context.Background(), proxmox.ACLOptions{
 		Path:      fmt.Sprintf("/pool/%s", poolname),
@@ -305,7 +343,7 @@ func (pve ProxmoxClient) AddGroupToPool(groupname common.Groupname, poolname str
 	}
 }
 
-func (pve ProxmoxClient) DelGroupFromPool(groupname common.Groupname, poolname string) (int, error) {
+func (pve ProxmoxClient) DelGroupFromPool(groupname common.Groupname, poolname common.Poolname) (int, error) {
 	// removes the group from the pool with the predetermined PAAS client role
 	err := pve.client.UpdateACL(context.Background(), proxmox.ACLOptions{
 		Path:   fmt.Sprintf("/pool/%s", poolname),
@@ -387,6 +425,27 @@ func (pve ProxmoxClient) GetUser(username common.Username) (common.User, int, er
 		user.Mail = pveuser.Email
 		return user, http.StatusOK, nil
 	}
+}
+
+func (pve ProxmoxClient) GetAllUsernames() ([]common.Username, int, error) {
+	usernames := []common.Username{}
+
+	pveusers, err := pve.client.Users(context.Background())
+	if IsProxmoxNotFound(err) { // errors if pool does not exist
+		return usernames, http.StatusNotFound, err
+	} else if err != nil {
+		return usernames, http.StatusInternalServerError, err
+	}
+
+	for _, pveuser := range pveusers {
+		username, err := common.ParseUsername(pveuser.UserID)
+		if err != nil {
+			return usernames, http.StatusInternalServerError, err
+		}
+		usernames = append(usernames, username)
+	}
+
+	return usernames, http.StatusOK, nil
 }
 
 func (pve ProxmoxClient) DelUser(username common.Username) (int, error) {

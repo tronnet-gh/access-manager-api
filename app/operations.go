@@ -3,8 +3,10 @@ package app
 import (
 	common "access-manager-api/app/common"
 	"access-manager-api/app/pve"
+	"cmp"
 	"fmt"
 	"net/http"
+	"slices"
 )
 
 func NewPool(backends *UserSession, poolname string, pool common.Pool) (int, error) {
@@ -81,6 +83,25 @@ func GetPool(backends *UserSession, poolname string) (common.Pool, int, error) {
 
 	return pool, http.StatusOK, nil
 }
+
+func GetAllPoolnames(backends *UserSession) ([]common.Poolname, int, error) {
+	combined_pool_names := []common.Poolname{}
+	pvepoolnames, code, err := backends.PVE.GetAllPoolnames()
+	if err != nil {
+		return combined_pool_names, code, err
+	}
+
+	localdbpoolnames, code, err := backends.DB.GetAllPoolnames()
+	if err != nil {
+		return combined_pool_names, code, err
+	}
+	combined_pool_names = slices.Concat(pvepoolnames, localdbpoolnames)
+	// drop duplicates
+	slices.Sort(combined_pool_names)
+	combined_pool_names = slices.Compact(combined_pool_names)
+	return combined_pool_names, http.StatusOK, nil
+}
+
 func DelPool(backends *UserSession, poolname string) (int, error) {
 	codepve, errpve := backends.PVE.DelPool(poolname)
 
@@ -164,6 +185,29 @@ func GetGroup(backends *UserSession, groupname common.Groupname) (common.Group, 
 	}
 }
 
+func GetAllGroupnames(backends *UserSession) ([]common.Groupname, int, error) {
+	combined_group_names := []common.Groupname{}
+	pve_group_names, code, err := backends.PVE.GetAllGroupnames()
+	if err != nil {
+		return combined_group_names, code, err
+	}
+
+	realm_group_names, code, err := backends.Realm.Handler.GetAllGroupnames()
+	if err != nil {
+		return combined_group_names, code, err
+	}
+	combined_group_names = slices.Concat(pve_group_names, realm_group_names)
+	// drop duplicates
+	slices.SortFunc(combined_group_names, func(a, b common.Groupname) int {
+		return cmp.Or(
+			cmp.Compare(a.Realm, b.Realm),
+			cmp.Compare(a.GroupID, b.GroupID),
+		)
+	})
+	combined_group_names = slices.Compact(combined_group_names)
+	return combined_group_names, http.StatusOK, nil
+}
+
 func DelGroup(backends *UserSession, groupname common.Groupname) (int, error) {
 	if groupname.Realm == "pve" {
 		return backends.PVE.DelGroup(groupname)
@@ -236,6 +280,29 @@ func GetUser(backends *UserSession, username common.Username) (common.User, int,
 	} else {
 		return common.User{}, http.StatusUnauthorized, fmt.Errorf("user is not in the same realm as requested user")
 	}
+}
+
+func GetAllUsernames(backends *UserSession) ([]common.Username, int, error) {
+	combined_user_names := []common.Username{}
+	pve_user_names, code, err := backends.PVE.GetAllUsernames()
+	if err != nil {
+		return combined_user_names, code, err
+	}
+
+	realm_user_names, code, err := backends.Realm.Handler.GetAllUsernames()
+	if err != nil {
+		return combined_user_names, code, err
+	}
+	combined_user_names = slices.Concat(pve_user_names, realm_user_names)
+	// drop duplicates
+	slices.SortFunc(combined_user_names, func(a, b common.Username) int {
+		return cmp.Or(
+			cmp.Compare(a.Realm, b.Realm),
+			cmp.Compare(a.UserID, b.UserID),
+		)
+	})
+	combined_user_names = slices.Compact(combined_user_names)
+	return combined_user_names, http.StatusOK, nil
 }
 
 func DelUser(backends *UserSession, username common.Username) (int, error) {

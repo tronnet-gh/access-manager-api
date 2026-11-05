@@ -28,7 +28,7 @@ func NewClientFromCredentials(config common.LocalDBConfig, username common.Usern
 	}
 }
 
-func (localdb DB) GetPool(poolname string) (common.Pool, []common.Group, int, error) {
+func (localdb DB) GetPool(poolname common.Poolname) (common.Pool, []common.Group, int, error) {
 	pool, ok := localdb.data[poolname]
 	if !ok {
 		return pool, []common.Group{}, http.StatusNotFound, fmt.Errorf("localdb pool %s does not exist", poolname)
@@ -36,7 +36,15 @@ func (localdb DB) GetPool(poolname string) (common.Pool, []common.Group, int, er
 	return pool, []common.Group{}, http.StatusOK, nil
 }
 
-func (localdb DB) NewPool(poolname string, pool common.Pool) (int, error) {
+func (localdb DB) GetAllPoolnames() ([]common.Poolname, int, error) {
+	poolnames := []common.Poolname{}
+	for poolname := range localdb.data {
+		poolnames = append(poolnames, poolname)
+	}
+	return poolnames, http.StatusOK, nil
+}
+
+func (localdb DB) NewPool(poolname common.Poolname, pool common.Pool) (int, error) {
 	_, ok := localdb.data[poolname]
 	if ok {
 		return http.StatusBadRequest, fmt.Errorf("localdb pool %s already exists", poolname)
@@ -50,7 +58,7 @@ func (localdb DB) NewPool(poolname string, pool common.Pool) (int, error) {
 	}
 }
 
-func (localdb DB) ModPool(poolname string, pool common.Pool) (int, error) {
+func (localdb DB) ModPool(poolname common.Poolname, pool common.Pool) (int, error) {
 	_, ok := localdb.data[poolname]
 	if !ok {
 		return http.StatusBadRequest, fmt.Errorf("localdb pool %s does not exist", poolname)
@@ -65,7 +73,7 @@ func (localdb DB) ModPool(poolname string, pool common.Pool) (int, error) {
 	}
 }
 
-func (localdb DB) DelPool(poolname string) (int, error) {
+func (localdb DB) DelPool(poolname common.Poolname) (int, error) {
 	_, ok := localdb.data[poolname]
 	if !ok {
 		return http.StatusBadRequest, fmt.Errorf("localdb pool %s does not exist", poolname)
@@ -91,15 +99,19 @@ func (localdb DB) GetGroup(groupname common.Groupname) (common.Group, []common.U
 	return common.Group{}, []common.User{}, http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
 }
 
+func (localdb DB) GetAllGroupnames() ([]common.Groupname, int, error) {
+	return []common.Groupname{}, http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
+}
+
 func (localdb DB) DelGroup(groupname common.Groupname) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
 }
 
-func (localdb DB) AddGroupToPool(groupname common.Groupname, poolname string) (int, error) {
+func (localdb DB) AddGroupToPool(groupname common.Groupname, poolname common.Poolname) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
 }
 
-func (localdb DB) DelGroupFromPool(groupname common.Groupname, poolname string) (int, error) {
+func (localdb DB) DelGroupFromPool(groupname common.Groupname, poolname common.Poolname) (int, error) {
 	return http.StatusNotImplemented, fmt.Errorf("localdb does not implement groups")
 }
 
@@ -113,6 +125,10 @@ func (localdb DB) ModUser(username common.Username, user common.User) (int, erro
 
 func (localdb DB) GetUser(username common.Username) (common.User, int, error) {
 	return common.User{}, http.StatusNotImplemented, fmt.Errorf("localdb does not implement users")
+}
+
+func (localdb DB) GetAllUsernames() ([]common.Username, int, error) {
+	return []common.Username{}, http.StatusNotImplemented, fmt.Errorf("localdb does not implement users")
 }
 
 func (localdb DB) DelUser(username common.Username) (int, error) {

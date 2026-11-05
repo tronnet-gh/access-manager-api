@@ -109,6 +109,21 @@ func DELETE_Ticket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func GET_Pools(w http.ResponseWriter, r *http.Request) {
+	backends, code, err := GetUserSessionFromRequest(r)
+	if err != nil {
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
+		return
+	}
+
+	poolnames, code, err := GetAllPoolnames(backends)
+	if err != nil {
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
+	} else {
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"poolnames": poolnames})
+	}
+}
+
 func GET_Pool(w http.ResponseWriter, r *http.Request) {
 	poolid := r.PathValue("poolid")
 	if poolid == "" {
@@ -188,6 +203,21 @@ func DELETE_Pool(w http.ResponseWriter, r *http.Request) {
 		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func GET_Groups(w http.ResponseWriter, r *http.Request) {
+	backends, code, err := GetUserSessionFromRequest(r)
+	if err != nil {
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
+		return
+	}
+
+	groupnames, code, err := GetAllGroupnames(backends)
+	if err != nil {
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
+	} else {
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"groupnames": groupnames})
 	}
 }
 
@@ -353,6 +383,21 @@ func DELETE_Pool_Group(w http.ResponseWriter, r *http.Request) {
 		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
 	} else {
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func GET_Users(w http.ResponseWriter, r *http.Request) {
+	backends, code, err := GetUserSessionFromRequest(r)
+	if err != nil {
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
+		return
+	}
+
+	usernames, code, err := GetAllUsernames(backends)
+	if err != nil {
+		paas.HTTPWriteJson(w, code, map[string]any{"error": err.Error()})
+	} else {
+		paas.HTTPWriteJson(w, http.StatusOK, map[string]any{"usernames": usernames})
 	}
 }
 
