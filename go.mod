@@ -1,6 +1,6 @@
 module access-manager-api
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/go-ldap/ldap/v3 v3.4.15
@@ -21,5 +21,5 @@ require (
 	github.com/magefile/mage v1.17.2 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 )
