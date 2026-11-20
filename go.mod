@@ -3,7 +3,7 @@ module proxmoxaas-fabric
 go 1.27.4
 
 require (
-	github.com/luthermonson/go-proxmox v0.8.2
+	github.com/luthermonson/go-proxmox v0.10.0
 	golang.org/x/sync v0.25.0
 )
 
